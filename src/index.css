@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.font-editorial {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes symphonyCandleFloatUp {
+  0%, 100% {
+    transform: translateY(5px) scaleY(0.92);
+    opacity: 0.22;
+  }
+  50% {
+    transform: translateY(-6px) scaleY(1.08);
+    opacity: 0.42;
+  }
+}
+
+@keyframes symphonyCandleFloatDown {
+  0%, 100% {
+    transform: translateY(-5px) scaleY(1.06);
+    opacity: 0.38;
+  }
+  50% {
+    transform: translateY(6px) scaleY(0.9);
+    opacity: 0.2;
+  }
+}
+
+.symphony-candle-up {
+  animation: symphonyCandleFloatUp 3.8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.symphony-candle-down {
+  animation: symphonyCandleFloatDown 4.4s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .symphony-candle-up,
+  .symphony-candle-down {
+    animation: none;
+  }
+}
+

@@ -1,11 +1,22 @@
-<div align="center">
+# Symphony Markets Academy
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+**Symphony Markets Academy** is a 100% free, open-source "No-Scam Zone" educational platform and interactive market risk simulator built for visual, step-by-step learning on sub-penny XRPL and Stellar rails.
 
-  <h1>Built with AI Studio</h2>
+## Standalone Sections
+- **Welcome Stage**: Focused landing stage featuring the Symphony Markets Academy Golden Harp Candlestick emblem and Welcome Video playlist.
+- **Features**: Visual overview of the $5 Real-Wallet Roadmap, Plain-English AI Market Mentor, Scam Screen X-Ray Inspector, and 2,500-path Strategy Time Machine.
+- **KSBC Gold RWA Classroom**: Educational training laboratory for Kingdom Symphony Bible Coin (KSBC) and Real-World Asset (RWA) gold tokenization concepts (personal learning only; not a live tradable coin).
+- **Audio Podcast**: Dedicated streaming audio studio for the 57-minute deep dive (*Crypto Self-Custody & AI Content Studios*) with 9 interactive timestamp chapters.
+- **Our Story & Video Library**: Founder narrative and inline video lessons.
+- **Free PDF Guide & Sanctuary Library**: Inline reader and direct downloads for the *No-Scam Zone Manifesto*, *Certificate of Commitment*, *Reader's Companion*, and *Quantum Analemma A.I. Technology Cycle* book.
+- **Interactive Training App**: Live XRP & XLM candlestick pattern decoder, 2% risk-per-trade position sizer (`$0.10 = 1R`), read-only public wallet watch, and decentralized DEX AMM pool inspector.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Local Development
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-</div>
+Open `http://localhost:3000`.

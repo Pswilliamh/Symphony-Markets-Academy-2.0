@@ -1,0 +1,443 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Bootstrapped Owner Admin + Optional Separate Google Admin Account (Verified Email Mandatory)
+    function isBootstrapAdmin() {
+      return isVerifiedUser()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() >= 5
+        && request.auth.token.email.size() <= 160
+        && (
+          request.auth.token.email == 'PsWilliamh@gmail.com' ||
+          request.auth.token.email == 'pswilliamh@gmail.com'
+        );
+    }
+
+    function isSecondaryAdmin() {
+      return isVerifiedUser()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() >= 5
+        && request.auth.token.email.size() <= 160
+        && exists(/databases/$(database)/documents/academyAdmin/settings)
+        && get(/databases/$(database)/documents/academyAdmin/settings).data.secondaryAdminEmail is string
+        && get(/databases/$(database)/documents/academyAdmin/settings).data.secondaryAdminEmail.size() >= 5
+        && get(/databases/$(database)/documents/academyAdmin/settings).data.secondaryAdminEmail == request.auth.token.email;
+    }
+
+    function isAcademyAdmin() {
+      return isBootstrapAdmin() || isSecondaryAdmin();
+    }
+
+    // Pillar 2: Validation Blueprint for UserSecuritySession (/users/{userId})
+    function isValidUserSecuritySession(data) {
+      return data.keys().hasAll([
+          'uid',
+          'walletModeUnlocked',
+          'lastWalletNetwork',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'walletModeUnlocked',
+          'lastWalletNetwork',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.walletModeUnlocked is bool
+        && data.lastWalletNetwork is string
+        && data.lastWalletNetwork.size() >= 4
+        && data.lastWalletNetwork.size() <= 32
+        && (
+          data.lastWalletNetwork == 'Bitcoin' ||
+          data.lastWalletNetwork == 'Xaman_XRPL' ||
+          data.lastWalletNetwork == 'XRPL' ||
+          data.lastWalletNetwork == 'Stellar' ||
+          data.lastWalletNetwork == 'EVM_TrustExtension'
+        )
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Pillar 2: Validation Blueprint for WalletSetApproval (/users/{userId}/walletApprovals/{approvalId})
+    function isValidWalletSetApproval(data) {
+      return data.keys().hasAll([
+          'ownerUid',
+          'setNumber',
+          'coinTicker',
+          'walletTarget',
+          'publicWalletAddress',
+          'buyPrice',
+          'sellPrice',
+          'quantity',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid',
+          'setNumber',
+          'coinTicker',
+          'walletTarget',
+          'publicWalletAddress',
+          'buyPrice',
+          'sellPrice',
+          'quantity',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.ownerUid is string
+        && data.ownerUid.size() >= 1
+        && data.ownerUid.size() <= 128
+        && data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.ownerUid == request.auth.uid
+        && data.setNumber is int
+        && data.setNumber >= 1
+        && data.setNumber <= 10
+        && data.coinTicker is string
+        && data.coinTicker.size() >= 3
+        && data.coinTicker.size() <= 8
+        && (
+          data.coinTicker == 'BTC' ||
+          data.coinTicker == 'XRP' ||
+          data.coinTicker == 'XLM'
+        )
+        && data.walletTarget is string
+        && data.walletTarget.size() >= 5
+        && data.walletTarget.size() <= 32
+        && (
+          data.walletTarget == 'TrustWallet' ||
+          data.walletTarget == 'Xaman' ||
+          data.walletTarget == 'TrustExtension'
+        )
+        && data.publicWalletAddress is string
+        && data.publicWalletAddress.size() >= 4
+        && data.publicWalletAddress.size() <= 96
+        && data.publicWalletAddress.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.buyPrice is number
+        && data.buyPrice > 0
+        && data.buyPrice <= 1000000
+        && data.sellPrice is number
+        && data.sellPrice > 0
+        && data.sellPrice <= 1000000
+        && data.quantity is number
+        && data.quantity > 0
+        && data.quantity <= 100000000
+        && data.status is string
+        && data.status.size() >= 6
+        && data.status.size() <= 16
+        && (data.status == 'dispatched' || data.status == 'signed')
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Pillar 2: Validation Blueprint for AcademyPublicGates (/academyConfig/publicGates)
+    function isValidAcademyPublicGates(data) {
+      return data.keys().hasAll([
+          'intermediatePasscodeHash',
+          'advancedPasscodeHash',
+          'intermediateGateEnabled',
+          'advancedGateEnabled',
+          'orientationVideoUrl',
+          'orientationVideoTitle',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'intermediatePasscodeHash',
+          'advancedPasscodeHash',
+          'intermediateGateEnabled',
+          'advancedGateEnabled',
+          'orientationVideoUrl',
+          'orientationVideoTitle',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.intermediatePasscodeHash is string
+        && data.intermediatePasscodeHash.size() == 64
+        && data.intermediatePasscodeHash.matches('^[a-f0-9]{64}$')
+        && data.advancedPasscodeHash is string
+        && data.advancedPasscodeHash.size() == 64
+        && data.advancedPasscodeHash.matches('^[a-f0-9]{64}$')
+        && data.intermediateGateEnabled is bool
+        && data.advancedGateEnabled is bool
+        && data.orientationVideoUrl is string
+        && data.orientationVideoUrl.size() <= 512
+        && (
+          data.orientationVideoUrl == '' ||
+          data.orientationVideoUrl.matches('^(https://|/assets/|/api/drive-video/).+$')
+        )
+        && data.orientationVideoTitle is string
+        && data.orientationVideoTitle.size() >= 3
+        && data.orientationVideoTitle.size() <= 160
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Pillar 2: Validation Blueprint for AcademyAdminSettings (/academyAdmin/settings)
+    function isValidAcademyAdminSettings(data) {
+      return data.keys().hasAll([
+          'secondaryAdminEmail',
+          'intermediatePasscodeLabel',
+          'advancedPasscodeLabel',
+          'updatedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'secondaryAdminEmail',
+          'intermediatePasscodeLabel',
+          'advancedPasscodeLabel',
+          'updatedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.secondaryAdminEmail is string
+        && data.secondaryAdminEmail.size() <= 160
+        && (
+          data.secondaryAdminEmail == '' ||
+          data.secondaryAdminEmail.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$')
+        )
+        && data.intermediatePasscodeLabel is string
+        && data.intermediatePasscodeLabel.size() >= 3
+        && data.intermediatePasscodeLabel.size() <= 64
+        && data.advancedPasscodeLabel is string
+        && data.advancedPasscodeLabel.size() >= 3
+        && data.advancedPasscodeLabel.size() <= 64
+        && data.updatedByUid is string
+        && data.updatedByUid.size() >= 1
+        && data.updatedByUid.size() <= 128
+        && data.updatedByUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.updatedByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Master Gate Helper: Parent session must exist, belong to request.auth.uid, and be unlocked
+    function isParentSessionActive(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(userId)).data.walletModeUnlocked == true;
+    }
+
+    // Collection 1: /users/{userId}
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserSecuritySession(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidUserSecuritySession(incoming()) && (
+        isOwner(userId)
+        && isValidId(userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Lock or Unlock Live Wallet Mode
+          incoming().diff(existing()).affectedKeys().hasOnly(['walletModeUnlocked', 'updatedAt'])
+          ||
+          // Action 2: Update Active Wallet Network + Unlock State
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'walletModeUnlocked',
+            'lastWalletNetwork',
+            'updatedAt'
+          ])
+        )
+      );
+
+      allow delete: if false;
+
+      // Subcollection 2: /users/{userId}/walletApprovals/{approvalId}
+      match /walletApprovals/{approvalId} {
+        allow get: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(approvalId)
+          && isParentSessionActive(userId);
+        allow list: if false;
+
+        allow create: if isOwner(userId)
+          && isValidId(userId)
+          && isValidId(approvalId)
+          && isValidWalletSetApproval(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && isParentSessionActive(userId);
+
+        allow update: if isValidWalletSetApproval(incoming()) && (
+          isOwner(userId)
+          && isValidId(userId)
+          && isValidId(approvalId)
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          // Terminal State Lock: Once 'signed', no subsequent mutations are permitted (unless Academy Admin override)
+          && (existing().status != 'signed' || isAcademyAdmin())
+          && (
+            // Action 1: Transition from 'dispatched' to terminal 'signed'
+            (
+              existing().status == 'dispatched'
+              && incoming().status == 'signed'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            )
+            ||
+            // Action 2: Refresh 'dispatched' order pricing/sizing prior to signing
+            (
+              existing().status == 'dispatched'
+              && incoming().status == 'dispatched'
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'walletTarget',
+                'publicWalletAddress',
+                'buyPrice',
+                'sellPrice',
+                'quantity',
+                'updatedAt'
+              ])
+            )
+          )
+          && isParentSessionActive(userId)
+        );
+
+        allow delete: if false;
+      }
+    }
+
+    // Collection 3: /academyConfig/{configId} (Singleton 'publicGates' — SHA-256 hashes & public video URL only)
+    match /academyConfig/{configId} {
+      allow get: if isValidId(configId) && configId == 'publicGates';
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidId(configId)
+        && configId == 'publicGates'
+        && isValidAcademyPublicGates(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAcademyAdmin();
+
+      allow update: if isValidAcademyPublicGates(incoming()) && (
+        isSignedIn()
+        && isValidId(configId)
+        && configId == 'publicGates'
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Update Passcode Hashes & Gate Toggles
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'intermediatePasscodeHash',
+            'advancedPasscodeHash',
+            'intermediateGateEnabled',
+            'advancedGateEnabled',
+            'updatedAt'
+          ])
+          ||
+          // Action 2: Update Orientation Video Metadata
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'orientationVideoUrl',
+            'orientationVideoTitle',
+            'updatedAt'
+          ])
+          ||
+          // Action 3: Full Admin Gate & Video Sync
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'intermediatePasscodeHash',
+            'advancedPasscodeHash',
+            'intermediateGateEnabled',
+            'advancedGateEnabled',
+            'orientationVideoUrl',
+            'orientationVideoTitle',
+            'updatedAt'
+          ])
+        )
+        && isAcademyAdmin()
+      );
+
+      allow delete: if false;
+    }
+
+    // Collection 4: /academyAdmin/{adminDocId} (Singleton 'settings' — Strictly Admin-Only PII & Passcode Hints)
+    match /academyAdmin/{adminDocId} {
+      allow get: if isSignedIn()
+        && isValidId(adminDocId)
+        && adminDocId == 'settings'
+        && isAcademyAdmin();
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidId(adminDocId)
+        && adminDocId == 'settings'
+        && isValidAcademyAdminSettings(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAcademyAdmin();
+
+      allow update: if isValidAcademyAdminSettings(incoming()) && (
+        isSignedIn()
+        && isValidId(adminDocId)
+        && adminDocId == 'settings'
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Update Separate Admin Google Email (Bootstrap Owner or Current Admin)
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'secondaryAdminEmail',
+            'updatedByUid',
+            'updatedAt'
+          ])
+          ||
+          // Action 2: Update Admin Passcode Reference Labels & Separate Admin Email
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'secondaryAdminEmail',
+            'intermediatePasscodeLabel',
+            'advancedPasscodeLabel',
+            'updatedByUid',
+            'updatedAt'
+          ])
+        )
+        && isAcademyAdmin()
+      );
+
+      allow delete: if false;
+    }
+  }
+}

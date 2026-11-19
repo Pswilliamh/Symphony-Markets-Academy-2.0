@@ -1,0 +1,264 @@
+{
+  "entities": {
+    "UserSecuritySession": {
+      "title": "UserSecuritySession",
+      "description": "Owner-only Google-authenticated security unlock session for Live Wallet Mode (zero PII stored).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the authenticated owner."
+        },
+        "walletModeUnlocked": {
+          "type": "boolean",
+          "description": "Whether Live Wallet Mode and real-coin handoffs are currently unlocked."
+        },
+        "lastWalletNetwork": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 32,
+          "enum": ["Bitcoin", "Xaman_XRPL", "XRPL", "Stellar", "EVM_TrustExtension"],
+          "description": "Last verified non-custodial wallet rail."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "walletModeUnlocked",
+        "lastWalletNetwork",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WalletSetApproval": {
+      "title": "WalletSetApproval",
+      "description": "Non-custodial audit record created when a Google-verified user dispatches or signs a 10-Set Buy/Sell order in Trust Wallet or Xaman.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the authenticated owner."
+        },
+        "setNumber": {
+          "type": "number",
+          "description": "Trade set index from 1 to 10."
+        },
+        "coinTicker": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 8,
+          "enum": ["BTC", "XRP", "XLM"],
+          "description": "Spot asset ticker."
+        },
+        "walletTarget": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 32,
+          "enum": ["TrustWallet", "Xaman", "TrustExtension"],
+          "description": "External non-custodial wallet target."
+        },
+        "publicWalletAddress": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 96,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Public self-custody wallet address (never private keys)."
+        },
+        "buyPrice": {
+          "type": "number",
+          "description": "Planned limit buy price in USD."
+        },
+        "sellPrice": {
+          "type": "number",
+          "description": "Planned limit sell or safety stop price in USD."
+        },
+        "quantity": {
+          "type": "number",
+          "description": "1x Spot coin quantity."
+        },
+        "status": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 16,
+          "enum": ["dispatched", "signed"],
+          "description": "Approval lifecycle status (terminal once 'signed')."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerUid",
+        "setNumber",
+        "coinTicker",
+        "walletTarget",
+        "publicWalletAddress",
+        "buyPrice",
+        "sellPrice",
+        "quantity",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AcademyPublicGates": {
+      "title": "AcademyPublicGates",
+      "description": "Publicly readable non-PII curriculum gate hashes (SHA-256 only, zero plaintext passwords) and public orientation video metadata.",
+      "type": "object",
+      "properties": {
+        "intermediatePasscodeHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hex digest of the normalized Intermediate cohort passcode."
+        },
+        "advancedPasscodeHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hex digest of the normalized Advanced cohort passcode."
+        },
+        "intermediateGateEnabled": {
+          "type": "boolean",
+          "description": "Whether Intermediate curriculum chapters require passcode or Admin Google login."
+        },
+        "advancedGateEnabled": {
+          "type": "boolean",
+          "description": "Whether Advanced curriculum chapters require passcode or Admin Google login."
+        },
+        "orientationVideoUrl": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 512,
+          "description": "Optional public URL or /assets path for the Progressive Mastery Orientation Video."
+        },
+        "orientationVideoTitle": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160,
+          "description": "Public title of the Progressive Mastery Orientation Video."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "intermediatePasscodeHash",
+        "advancedPasscodeHash",
+        "intermediateGateEnabled",
+        "advancedGateEnabled",
+        "orientationVideoUrl",
+        "orientationVideoTitle",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AcademyAdminSettings": {
+      "title": "AcademyAdminSettings",
+      "description": "Strictly Admin-isolated settings containing optional separate Admin Google email and instructor passcode reference labels.",
+      "type": "object",
+      "properties": {
+        "secondaryAdminEmail": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 160,
+          "description": "Optional separate Google login email granted full Academy Admin privileges."
+        },
+        "intermediatePasscodeLabel": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "description": "Admin-only readable reference label for the active Intermediate passcode."
+        },
+        "advancedPasscodeLabel": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "description": "Admin-only readable reference label for the active Advanced passcode."
+        },
+        "updatedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the Admin who last saved these settings."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "secondaryAdminEmail",
+        "intermediatePasscodeLabel",
+        "advancedPasscodeLabel",
+        "updatedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserSecuritySession"
+      },
+      "description": "Owner-only Google-authenticated security session state per user UID."
+    },
+    "/users/{userId}/walletApprovals/{approvalId}": {
+      "schema": {
+        "$ref": "#/entities/WalletSetApproval"
+      },
+      "description": "Owner-only non-custodial wallet sign/approval dispatches gated by parent UserSecuritySession."
+    },
+    "/academyConfig/{configId}": {
+      "schema": {
+        "$ref": "#/entities/AcademyPublicGates"
+      },
+      "description": "Singleton public curriculum gate configuration (configId == 'publicGates') storing SHA-256 passcode hashes and orientation video URL."
+    },
+    "/academyAdmin/{adminDocId}": {
+      "schema": {
+        "$ref": "#/entities/AcademyAdminSettings"
+      },
+      "description": "Singleton Admin-isolated settings document (adminDocId == 'settings') storing separate Admin Google email and instructor passcode hints."
+    }
+  }
+}

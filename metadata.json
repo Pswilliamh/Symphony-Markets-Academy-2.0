@@ -1,0 +1,6 @@
+{
+  "name": "Symphony Markets",
+  "description": "Educational crypto risk management simulator, live XRP and XLM candlestick pattern analyzer, and paper portfolio dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

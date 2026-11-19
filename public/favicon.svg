@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="coinBg" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+    <linearGradient id="goldFrame" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FDE68A" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+  </defs>
+
+  <!-- Crypto Token Hexagonal-Circle Medallion Base -->
+  <circle cx="32" cy="32" r="29" fill="url(#coinBg)" stroke="url(#goldFrame)" stroke-width="2.5" />
+  <circle cx="32" cy="32" r="25.5" stroke="#38BDF8" stroke-opacity="0.28" stroke-width="1" stroke-dasharray="3 3" />
+
+  <!-- Harp Candlesticks (The Harp Strings as Bullish & Harmonic Candlesticks) -->
+  <!-- String 1: Sky-Blue Candlestick -->
+  <line x1="21" y1="22" x2="21" y2="45" stroke="#38BDF8" stroke-width="1.6" stroke-linecap="round" />
+  <rect x="19" y="29" width="4" height="9" rx="1" fill="#38BDF8" />
+
+  <!-- String 2: Amber Pullback Candlestick -->
+  <line x1="27" y1="19" x2="27" y2="44" stroke="#F59E0B" stroke-width="1.6" stroke-linecap="round" />
+  <rect x="25" y="26" width="4" height="8" rx="1" fill="#F59E0B" />
+
+  <!-- String 3: Emerald Bullish Candlestick -->
+  <line x1="33" y1="17" x2="33" y2="42" stroke="#10B981" stroke-width="1.6" stroke-linecap="round" />
+  <rect x="31" y="22" width="4" height="11" rx="1" fill="#10B981" />
+
+  <!-- String 4: Tall Emerald Breakout Candlestick -->
+  <line x1="39" y1="16" x2="39" y2="39" stroke="#34D399" stroke-width="1.6" stroke-linecap="round" />
+  <rect x="37" y="19" width="4" height="11" rx="1" fill="#34D399" />
+
+  <!-- Symphony Harp Golden Frame (Forepillar, Harmonic S-Curve Neck & Soundboard Base) -->
+  <!-- Left Forepillar -->
+  <path
+    d="M15 15V46C15 48.2 16.8 50 19 50H37"
+    stroke="url(#goldFrame)"
+    stroke-width="3.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Top Harmonic S-Curve Neck -->
+  <path
+    d="M15 15C20 11 26 19 34 16C39 14.2 43 16 44 20"
+    stroke="url(#goldFrame)"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <!-- Angled Soundboard / Pedestal Sweep -->
+  <path
+    d="M18 49L43 37"
+    stroke="url(#goldFrame)"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <!-- Crown Node on Harp Pillar -->
+  <circle cx="15" cy="15" r="2.6" fill="#FDE68A" />
+
+  <!-- Floating Music Notes Rising Out of the Candlestick Strings -->
+  <!-- Note 1: Single Eighth Note (Upper Right) -->
+  <g transform="translate(45, 9)">
+    <ellipse cx="3" cy="9.5" rx="2.7" ry="2" transform="rotate(-20 3 9.5)" fill="#FDE68A" />
+    <path d="M5.2 9V1.5C7.4 2.2 8.8 3.8 8.5 6" stroke="#FDE68A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Note 2: Beamed Pair / Harmonic Note (Mid Right) -->
+  <g transform="translate(46, 23)">
+    <ellipse cx="2.6" cy="8.5" rx="2.4" ry="1.8" transform="rotate(-20 2.6 8.5)" fill="#38BDF8" />
+    <path d="M4.6 8V1.8L9.5 0.8V6.8" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    <ellipse cx="7.5" cy="7.3" rx="2.4" ry="1.8" transform="rotate(-20 7.5 7.3)" fill="#38BDF8" />
+  </g>
+</svg>
