@@ -29,6 +29,8 @@ import { DayTraderSkillSuite } from './components/DayTraderSkillSuite';
 import { DecentralizedAiDexDesk } from './components/DecentralizedAiDexDesk';
 import { FibonacciSymphonyGeometryModule } from './components/FibonacciSymphonyGeometryModule';
 import { FibonacciSymphonyMarkersStudio } from './components/FibonacciSymphonyMarkersStudio';
+import { ForexEducationModule } from './components/ForexEducationModule';
+import { KsbcGoldTrainingPage } from './components/KsbcGoldTrainingPage';
 import { LandingPageView, PublicPageTab } from './components/LandingPageView';
 import { LiveAiSignalHelper } from './components/LiveAiSignalHelper';
 import { MarketCyclesEducationModule } from './components/MarketCyclesEducationModule';
@@ -45,6 +47,7 @@ import {
   RiskSimulatorPanel,
 } from './components/RiskSimulatorPanel';
 import { StartHereRoadmap } from './components/StartHereRoadmap';
+import { SupportResistanceRadarCard } from './components/SupportResistanceRadarCard';
 import { SymphonyCandlestickBackdrop, SymphonyHarpLogo } from './components/SymphonyHarpLogo';
 import { TenSetAutoTraderLab } from './components/TenSetAutoTraderLab';
 import {
@@ -1081,7 +1084,7 @@ export default function App() {
                   onClick={() => openCampusHub()}
                   className="px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                  4-Module Campus
+                  Academy Campus
                 </button>
               ) : (
                 <button
@@ -1170,7 +1173,7 @@ export default function App() {
                 viewMode === 'app' ? 'text-sky-600 dark:text-sky-400 font-semibold' : ''
               }`}
             >
-              4-Module Campus
+              Academy Campus
             </button>
           </nav>
         </>
@@ -1232,7 +1235,7 @@ export default function App() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-                      <span>All 4 Modules</span>
+                      <span>All Modules</span>
                     </button>
 
                     <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
@@ -1399,7 +1402,11 @@ export default function App() {
                   handleSelectSymbol(sym);
                   navigateToChapter(targetId || 'ten-set-auto-trader');
                 }}
-                onOpenKsbcGoldLedger={() => navigatePublicPage('ksbc')}
+                onOpenKsbcGoldLedger={() =>
+                  isStandaloneMode
+                    ? openStandaloneModule('ksbc')
+                    : openModuleInCampus('ksbc')
+                }
               />
             </section>
           )}
@@ -1722,6 +1729,44 @@ export default function App() {
                         `Loaded Set #${numStr} (${payload.setupName}) into Embedded XRPL DEX — ${payload.quantityXrp} XRP Ready!`
                       );
                     }}
+                  />
+
+                  <SupportResistanceRadarCard
+                    symbol={symbol}
+                    livePrice={livePrice}
+                    candles={activeCandles}
+                    fibLevels={fibLevels}
+                    connectedXrplAddress={
+                      embeddedXrplAddress ||
+                      watchedWallets.find((w) => w.network === 'XRPL')?.address ||
+                      ''
+                    }
+                    onLoadSetIntoDex={(payload) => {
+                      handleSelectSymbol('XRPUSDT');
+                      setInstrument('spot');
+                      setLeverage(1);
+                      setTradeSide('long');
+                      setShowRiskOverlay(true);
+                      if (payload.walletAddress) {
+                        setEmbeddedXrplAddress(payload.walletAddress);
+                      }
+                      setImportedXrplDexSet({
+                        ...payload,
+                        nonce: Date.now(),
+                      });
+                      setAlertBanner(
+                        `Staged ${payload.setupName} into Embedded XRPL DEX — Buy $${payload.buyPrice.toFixed(
+                          4
+                        )} · Sell $${payload.sellPrice.toFixed(4)} (${payload.quantityXrp} XRP)!`
+                      );
+                    }}
+                    onAddPriceAlert={(newAl) =>
+                      setAlerts((prev) => [
+                        { ...newAl, id: `al_${Date.now()}`, triggered: false },
+                        ...prev,
+                      ])
+                    }
+                    onNotifyBanner={(msg) => setAlertBanner(msg)}
                   />
 
                   <section className="flex flex-wrap items-center justify-between gap-4 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-4">
@@ -2110,6 +2155,32 @@ export default function App() {
                       />
                     </section>
                   )}
+
+                  {activeLesson.id === 'ksbc-gold' && (
+                    <section id="ksbc-gold">
+                      <KsbcGoldTrainingPage
+                        onEnterApp={handleEnterApp}
+                        xrpLivePrice={xrpLive}
+                      />
+                    </section>
+                  )}
+
+                  {activeLesson.id === 'forex-guide' && (
+                    <section id="forex-guide">
+                      <ForexEducationModule
+                        onOpenCryptoFoundations={() =>
+                          isStandaloneMode
+                            ? openStandaloneModule('foundations')
+                            : openModuleInCampus('foundations')
+                        }
+                        onOpenFibonacciStudio={() =>
+                          isStandaloneMode
+                            ? openStandaloneModule('fibonacci')
+                            : openModuleInCampus('fibonacci')
+                        }
+                      />
+                    </section>
+                  )}
                 </>
               )}
 
@@ -2140,7 +2211,7 @@ export default function App() {
                         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                       >
                         <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-                        <span>Back to 4-Module Campus</span>
+                        <span>Back to Academy Campus</span>
                       </button>
                     ) : (
                       <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
@@ -2266,7 +2337,7 @@ export default function App() {
                   onClick={() => openCampusHub()}
                   className="text-emerald-700 dark:text-emerald-400 hover:underline underline-offset-2 font-semibold cursor-pointer"
                 >
-                  All 4 Modules →
+                  All Modules →
                 </button>
               </>
             ) : (
@@ -2302,7 +2373,7 @@ export default function App() {
                   }
                   className="hover:text-slate-900 dark:hover:text-white underline underline-offset-2 cursor-pointer"
                 >
-                  {viewMode === 'landing' ? 'Open 4-Module Campus' : 'Return to Welcome Stage'}
+                  {viewMode === 'landing' ? 'Open Academy Campus' : 'Return to Welcome Stage'}
                 </button>
               </>
             )}

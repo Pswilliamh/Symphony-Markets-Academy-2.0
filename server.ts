@@ -715,6 +715,256 @@ Write a crystal-clear, encouraging Masterclass Explanation with concise, well-ba
     }
   });
 
+  // =========================================================================
+  // Xaman (Xumm) Android QR Direct Connect & 1-Swipe Signing Proxy Routes
+  // Keeps XAMAN_API_KEY & XAMAN_API_SECRET strictly server-side (zero client exposure)
+  // =========================================================================
+  const XAMAN_PLATFORM_BASE = 'https://xumm.app/api/v1/platform';
+
+  function getXamanCredentials(): { apiKey: string; apiSecret: string } | null {
+    const apiKey = String(process.env.XAMAN_API_KEY ?? '').trim();
+    const apiSecret = String(process.env.XAMAN_API_SECRET ?? '').trim();
+    if (!apiKey || !apiSecret) return null;
+    return { apiKey, apiSecret };
+  }
+
+  app.get('/api/xaman/status', (_req, res) => {
+    const creds = getXamanCredentials();
+    res.json({
+      configured: Boolean(creds),
+      mode: creds ? 'live_xaman_api' : 'direct_qr_handoff',
+    });
+  });
+
+  app.post('/api/xaman/payload', async (req, res) => {
+    const creds = getXamanCredentials();
+    if (!creds) {
+      res.status(503).json({
+        configured: false,
+        error:
+          'Xaman API credentials are not configured yet. Add XAMAN_API_KEY and XAMAN_API_SECRET in AI Studio Secrets for 1-swipe pre-filled signing, or use the built-in Direct Xaman QR Handoff below.',
+      });
+      return;
+    }
+
+    try {
+      const kind = String(req.body?.kind ?? 'signin').toLowerCase();
+      const userToken = typeof req.body?.userToken === 'string' ? req.body.userToken.trim() : '';
+      let txjson: Record<string, unknown>;
+
+      if (kind === 'signin') {
+        txjson = { TransactionType: 'SignIn' };
+      } else if (kind === 'trustset') {
+        txjson = {
+          TransactionType: 'TrustSet',
+          LimitAmount: {
+            currency: XRPL_RLUSD_HEX,
+            issuer: XRPL_RLUSD_ISSUER,
+            value: '100000',
+          },
+        };
+      } else if (kind === 'offercreate') {
+        const rawTx = req.body?.txjson;
+        if (
+          !rawTx ||
+          typeof rawTx !== 'object' ||
+          rawTx.TransactionType !== 'OfferCreate' ||
+          !rawTx.TakerGets ||
+          !rawTx.TakerPays
+        ) {
+          res.status(400).json({ error: 'Invalid XRPL OfferCreate payload.' });
+          return;
+        }
+        txjson = {
+          TransactionType: 'OfferCreate',
+          TakerGets: rawTx.TakerGets,
+          TakerPays: rawTx.TakerPays,
+        };
+      } else if (kind === 'offercancel') {
+        const offerSeq = Number(req.body?.offerSequence ?? 0);
+        if (!Number.isInteger(offerSeq) || offerSeq <= 0) {
+          res.status(400).json({ error: 'Invalid OfferSequence for OfferCancel.' });
+          return;
+        }
+        txjson = {
+          TransactionType: 'OfferCancel',
+          OfferSequence: offerSeq,
+        };
+      } else {
+        res.status(400).json({ error: 'Unsupported Xaman payload kind.' });
+        return;
+      }
+
+      const payloadBody: Record<string, unknown> = {
+        txjson,
+        options: {
+          submit: kind !== 'signin',
+          expire: 5,
+        },
+        custom_meta: {
+          instruction:
+            typeof req.body?.instruction === 'string' && req.body.instruction.trim()
+              ? req.body.instruction.trim().slice(0, 180)
+              : kind === 'signin'
+              ? 'Connect your Android Xaman wallet to Symphony Markets Academy Trade Desk.'
+              : 'Review your Symphony Markets 1x Spot XRPL DEX request and slide to sign.',
+        },
+      };
+
+      if (userToken) {
+        payloadBody.user_token = userToken;
+      }
+
+      const upstream = await fetch(`${XAMAN_PLATFORM_BASE}/payload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': creds.apiKey,
+          'X-API-Secret': creds.apiSecret,
+        },
+        body: JSON.stringify(payloadBody),
+      });
+
+      const data = (await upstream.json()) as {
+        uuid?: string;
+        next?: { always?: string };
+        refs?: { qr_png?: string; websocket_status?: string };
+        pushed?: boolean;
+        error?: { reference?: string; code?: number };
+        message?: string;
+      };
+
+      if (!upstream.ok || !data?.uuid) {
+        res.status(upstream.status || 502).json({
+          error: data?.message || 'Unable to create Xaman QR signing request.',
+        });
+        return;
+      }
+
+      res.json({
+        configured: true,
+        uuid: data.uuid,
+        qrPng: data.refs?.qr_png ?? '',
+        nextAlways: data.next?.always ?? `https://xumm.app/sign/${data.uuid}`,
+        pushed: Boolean(data.pushed),
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Network error connecting to Xaman API.';
+      res.status(502).json({ error: message });
+    }
+  });
+
+  app.get('/api/xaman/payload/:uuid', async (req, res) => {
+    const creds = getXamanCredentials();
+    if (!creds) {
+      res.status(503).json({ configured: false, error: 'Xaman API not configured.' });
+      return;
+    }
+
+    const uuid = String(req.params.uuid ?? '').trim();
+    if (!/^[0-9a-fA-F-]{16,64}$/.test(uuid)) {
+      res.status(400).json({ error: 'Invalid Xaman payload UUID.' });
+      return;
+    }
+
+    try {
+      const upstream = await fetch(`${XAMAN_PLATFORM_BASE}/payload/${encodeURIComponent(uuid)}`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': creds.apiKey,
+          'X-API-Secret': creds.apiSecret,
+        },
+      });
+
+      const data = (await upstream.json()) as {
+        meta?: {
+          resolved?: boolean;
+          signed?: boolean;
+          cancelled?: boolean;
+          expired?: boolean;
+          app_opened?: boolean;
+        };
+        response?: {
+          account?: string | null;
+          txid?: string | null;
+          dispatched_result?: string | null;
+        };
+        application?: {
+          issued_user_token?: string | null;
+        };
+      };
+
+      if (!upstream.ok) {
+        res.status(upstream.status).json({ error: 'Unable to check Xaman payload status.' });
+        return;
+      }
+
+      res.json({
+        uuid,
+        resolved: Boolean(data?.meta?.resolved),
+        signed: Boolean(data?.meta?.signed),
+        cancelled: Boolean(data?.meta?.cancelled),
+        expired: Boolean(data?.meta?.expired),
+        opened: Boolean(data?.meta?.app_opened),
+        account: data?.response?.account ?? null,
+        txid: data?.response?.txid ?? null,
+        dispatchedResult: data?.response?.dispatched_result ?? null,
+        userToken: data?.application?.issued_user_token ?? null,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unable to poll Xaman status.';
+      res.status(502).json({ error: message });
+    }
+  });
+
+  // =========================================================================
+  // Free Android Lock-Screen Market Alert Relay (ntfy.sh — Zero API Key / Zero KYC)
+  // =========================================================================
+  app.post('/api/notify-ntfy', async (req, res) => {
+    try {
+      const topic = String(req.body?.topic ?? '').trim();
+      const title = String(req.body?.title ?? 'Symphony Markets Alert').trim().slice(0, 120);
+      const message = String(req.body?.message ?? '').trim().slice(0, 500);
+      const priority = String(req.body?.priority ?? 'default').trim();
+
+      if (!/^[a-zA-Z0-9_-]{6,64}$/.test(topic)) {
+        res.status(400).json({
+          error:
+            'Enter a private topic name (6–64 letters, numbers, hyphens, or underscores — no spaces).',
+        });
+        return;
+      }
+
+      if (!message) {
+        res.status(400).json({ error: 'Alert message cannot be empty.' });
+        return;
+      }
+
+      const upstream = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
+        method: 'POST',
+        headers: {
+          Title: title,
+          Priority: ['min', 'low', 'default', 'high', 'urgent'].includes(priority)
+            ? priority
+            : 'default',
+          Tags: 'chart_with_upwards_trend',
+        },
+        body: message,
+      });
+
+      if (!upstream.ok) {
+        res.status(upstream.status).json({ error: 'Could not deliver notification to ntfy.sh.' });
+        return;
+      }
+
+      res.json({ ok: true, topic, deliveredAt: new Date().toISOString() });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Notification relay failed.';
+      res.status(502).json({ error: msg });
+    }
+  });
+
   // Default Google Drive Asset IDs from the shared Symphony Markets Academy folder & Video Media subfolder
   // Folder: https://drive.google.com/drive/folders/1hPDCoTd5K4163HsDW7_LtQXXB8VvBkv3
   // Video Media Subfolder: https://drive.google.com/drive/folders/1UbpPHFwQ9WSu7X1-O8qmNk7UCyroS5og

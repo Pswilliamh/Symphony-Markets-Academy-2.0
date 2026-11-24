@@ -7,6 +7,7 @@ import {
   setTrustline,
 } from '@gemwallet/api';
 import {
+  Camera,
   CheckCircle2,
   ClipboardPaste,
   Copy,
@@ -14,6 +15,7 @@ import {
   QrCode,
   RefreshCw,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   Volume2,
   Wallet,
@@ -30,6 +32,7 @@ import {
   playFibonacciHarmonicInterval,
   playTradeSetSymphonyNote,
 } from '../utils/tenSetSymphonyAudio';
+import { XrplCameraQrScanner } from './XrplCameraQrScanner';
 
 const XRPL_RLUSD_ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De';
 const XRPL_RLUSD_HEX = '524C555344000000000000000000000000000000';
@@ -208,6 +211,34 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
   const [showMobileQr, setShowMobileQr] = useState<boolean>(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copiedField, setCopiedField] = useState<'json' | 'qty' | 'price' | null>(null);
+
+  // Direct Xaman Android QR Connect & 1-Swipe Signing State
+  const [xamanApiConfigured, setXamanApiConfigured] = useState<boolean | null>(null);
+  const [xamanUserToken, setXamanUserToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem('symphony_xaman_user_token_v1') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [xamanConnectedViaQr, setXamanConnectedViaQr] = useState<boolean>(false);
+  const [showXamanConnectPanel, setShowXamanConnectPanel] = useState<boolean>(false);
+  const [xamanActivePayload, setXamanActivePayload] = useState<{
+    kind: 'signin' | 'trustset' | 'offercreate';
+    uuid: string;
+    qrPng: string;
+    nextAlways: string;
+    pushed: boolean;
+    title: string;
+    subtitle: string;
+  } | null>(null);
+  const [xamanFallbackQrUrl, setXamanFallbackQrUrl] = useState<string>('');
+  const [xamanFallbackTrustlineQrUrl, setXamanFallbackTrustlineQrUrl] = useState<string>('');
+  const [xamanFallbackTab, setXamanFallbackTab] = useState<'dex' | 'trustline'>('dex');
+  const [xamanPayloadState, setXamanPayloadState] = useState<
+    'idle' | 'waiting' | 'opened' | 'signed' | 'cancelled' | 'expired'
+  >('idle');
+  const [showTabletCameraScanner, setShowTabletCameraScanner] = useState<boolean>(false);
 
   const baseAsset = symbol === 'BTCUSDT' ? 'BTC' : symbol === 'XRPUSDT' ? 'XRP' : 'XLM';
   const decimals = symbol === 'BTCUSDT' ? 2 : 4;
@@ -594,6 +625,209 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
       if (pollTimer) clearInterval(pollTimer);
     };
   }, [showMobileQr, xamanDexDeepLink, walletInput, syncXrplAccount]);
+
+  // Check if server has XAMAN_API_KEY & XAMAN_API_SECRET configured when XRPL DEX tab opens
+  useEffect(() => {
+    if (executionMode !== 'xrpl_dex' || xamanApiConfigured !== null) return;
+    let active = true;
+    fetch('/api/xaman/status')
+      .then((r) => r.json())
+      .then((data: { configured?: boolean }) => {
+        if (active) setXamanApiConfigured(Boolean(data?.configured));
+      })
+      .catch(() => {
+        if (active) setXamanApiConfigured(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [executionMode, xamanApiConfigured]);
+
+  // Generate local fallback QR codes for Android Xaman when Xaman API keys are not yet set in Secrets
+  useEffect(() => {
+    if (!showXamanConnectPanel) return;
+    let active = true;
+    QRCode.toDataURL(xamanDexDeepLink, {
+      width: 212,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    })
+      .then((url) => {
+        if (active) setXamanFallbackQrUrl(url);
+      })
+      .catch(() => {});
+
+    QRCode.toDataURL(XAMAN_RLUSD_TRUSTLINE_URL, {
+      width: 212,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    })
+      .then((url) => {
+        if (active) setXamanFallbackTrustlineQrUrl(url);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [showXamanConnectPanel, xamanDexDeepLink]);
+
+  // Poll active Xaman live payload UUID until user slides to sign on Android Xaman
+  useEffect(() => {
+    if (!xamanActivePayload?.uuid) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const resp = await fetch(
+          `/api/xaman/payload/${encodeURIComponent(xamanActivePayload.uuid)}`
+        );
+        if (!resp.ok || cancelled) return;
+        const data = (await resp.json()) as {
+          resolved?: boolean;
+          signed?: boolean;
+          cancelled?: boolean;
+          expired?: boolean;
+          opened?: boolean;
+          account?: string | null;
+          txid?: string | null;
+          dispatchedResult?: string | null;
+          userToken?: string | null;
+        };
+        if (cancelled) return;
+
+        if (data.opened && !data.resolved) {
+          setXamanPayloadState('opened');
+        }
+
+        if (data.resolved) {
+          if (data.signed) {
+            setXamanPayloadState('signed');
+            if (data.userToken) {
+              setXamanUserToken(data.userToken);
+              try {
+                localStorage.setItem('symphony_xaman_user_token_v1', data.userToken);
+              } catch {
+                // Ignore storage errors
+              }
+            }
+            if (data.account && /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(data.account)) {
+              setWalletInput(data.account);
+              onChangeXrplAddress?.(data.account);
+              setXamanConnectedViaQr(true);
+              void syncXrplAccount(data.account);
+            } else if (/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(walletInput.trim())) {
+              void syncXrplAccount(walletInput.trim());
+            }
+
+            if (xamanActivePayload.kind === 'signin') {
+              setDexStatusMsg(
+                `Android Xaman Wallet Connected (${data.account?.slice(0, 8)}...${data.account?.slice(-5)})! Ready for 1-swipe QR signing.`
+              );
+            } else if (xamanActivePayload.kind === 'trustset') {
+              setDexStatusMsg(
+                `RLUSD TrustLine signed on Android Xaman!${
+                  data.txid ? ` Tx: ${data.txid.slice(0, 12)}...` : ''
+                }`
+              );
+            } else {
+              setDexStatusMsg(
+                `XRPL Order signed on Android Xaman (${data.dispatchedResult || 'Submitted'})!${
+                  data.txid ? ` Tx: ${data.txid.slice(0, 12)}...` : ''
+                }`
+              );
+            }
+            setXamanActivePayload(null);
+          } else if (data.expired) {
+            setXamanPayloadState('expired');
+            setDexErrorMsg('Xaman QR request expired after 5 minutes. Tap again to generate a fresh QR.');
+            setXamanActivePayload(null);
+          } else {
+            setXamanPayloadState('cancelled');
+            setDexErrorMsg('Request was declined in Android Xaman. No transaction was submitted.');
+            setXamanActivePayload(null);
+          }
+        }
+      } catch {
+        // Keep polling gently on transient hiccup
+      }
+    };
+
+    const timer = setInterval(() => void poll(), 2500);
+    void poll();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [xamanActivePayload, onChangeXrplAddress, syncXrplAccount, walletInput]);
+
+  const requestXamanPayload = async (params: {
+    kind: 'signin' | 'trustset' | 'offercreate';
+    title: string;
+    subtitle: string;
+    instruction: string;
+    txjson?: Record<string, unknown>;
+  }) => {
+    setDexErrorMsg(null);
+    setDexStatusMsg(null);
+    setShowXamanConnectPanel(true);
+
+    if (xamanApiConfigured === false) {
+      setXamanActivePayload(null);
+      setXamanFallbackTab(params.kind === 'trustset' ? 'trustline' : 'dex');
+      return;
+    }
+
+    setDexBusy(true);
+    try {
+      const resp = await fetch('/api/xaman/payload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: params.kind,
+          txjson: params.txjson,
+          instruction: params.instruction,
+          userToken: xamanUserToken || undefined,
+        }),
+      });
+      const data = (await resp.json()) as {
+        configured?: boolean;
+        uuid?: string;
+        qrPng?: string;
+        nextAlways?: string;
+        pushed?: boolean;
+        error?: string;
+      };
+
+      if (resp.status === 503 || data.configured === false) {
+        setXamanApiConfigured(false);
+        setXamanActivePayload(null);
+        setXamanFallbackTab(params.kind === 'trustset' ? 'trustline' : 'dex');
+        return;
+      }
+
+      if (!resp.ok || !data.uuid) {
+        setDexErrorMsg(data.error || 'Could not create Xaman Android QR request.');
+        return;
+      }
+
+      setXamanApiConfigured(true);
+      setXamanPayloadState('waiting');
+      setXamanActivePayload({
+        kind: params.kind,
+        uuid: data.uuid,
+        qrPng: data.qrPng || '',
+        nextAlways: data.nextAlways || `https://xumm.app/sign/${data.uuid}`,
+        pushed: Boolean(data.pushed),
+        title: params.title,
+        subtitle: params.subtitle,
+      });
+    } catch (err: unknown) {
+      setDexErrorMsg(err instanceof Error ? err.message : 'Unable to reach Xaman bridge.');
+    } finally {
+      setDexBusy(false);
+    }
+  };
 
   // Compute crystal-clear XRPL DEX order size & limit price
   // NEVER silently replace user's "2 XRP" with 0.948 XRP unless they explicitly clicked "Auto 2% Risk"!
@@ -1614,27 +1848,214 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
             </div>
 
             {/* ==============================================================
-             * STEP 1: CONNECT PUBLIC r... WALLET & CHECK RLUSD TRUSTLINE
+             * STEP 1: DIRECT ANDROID XAMAN QR CONNECT + PUBLIC r... SYNC
              * ============================================================== */}
             <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2.5">
-              <div className="flex items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span>Step 1 · Your Public XRPL Address (Read-Only)</span>
+                  <span>Step 1 · Connect Android Xaman Wallet (Scan QR)</span>
                 </span>
                 {acctSnapshot?.activated && (
                   <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                    ✓ Synced
+                    {xamanConnectedViaQr ? '✓ Xaman Paired' : '✓ Synced'}
                   </span>
                 )}
               </div>
+
+              {/* Primary Tablet <-> Android Xaman Two-Way QR Buttons (100% API-Key-Free) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTabletCameraScanner((v) => !v);
+                    setShowXamanConnectPanel(false);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {showTabletCameraScanner
+                      ? 'Close Tablet Camera'
+                      : 'Scan Android Receive QR'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={dexBusy}
+                  onClick={() => {
+                    setShowTabletCameraScanner(false);
+                    if (showXamanConnectPanel && !xamanActivePayload && xamanApiConfigured === false) {
+                      setShowXamanConnectPanel(false);
+                    } else {
+                      void requestXamanPayload({
+                        kind: 'signin',
+                        title: 'Scan With Xaman on Your Android Phone',
+                        subtitle:
+                          'Open Xaman on Android → tap the blue center Scan icon → scan this QR code and slide to connect your wallet to this tablet.',
+                        instruction:
+                          'Connect your Android Xaman wallet to Symphony Markets Academy XRP Trade Desk.',
+                      });
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {showXamanConnectPanel ? 'Hide Xaman QR' : 'Show QR for Android Xaman'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Tablet Camera Scanner: Hold Android Xaman "Receive" QR Up to Sync r... Instantly */}
+              {showTabletCameraScanner && (
+                <XrplCameraQrScanner
+                  onClose={() => setShowTabletCameraScanner(false)}
+                  onAddressScanned={(scannedAddr) => {
+                    setShowTabletCameraScanner(false);
+                    setWalletInput(scannedAddr);
+                    onChangeXrplAddress?.(scannedAddr);
+                    setXamanConnectedViaQr(true);
+                    setDexErrorMsg(null);
+                    setDexStatusMsg(
+                      `Scanned Android Xaman Receive QR (${scannedAddr.slice(0, 8)}...${scannedAddr.slice(
+                        -5
+                      )}) — Live balance synced!`
+                    );
+                    void syncXrplAccount(scannedAddr);
+                  }}
+                />
+              )}
+
+              {/* Live Tablet -> Android Xaman QR Pairing / Signing Box */}
+              {showXamanConnectPanel && (
+                <div className="rounded-lg border border-sky-400/50 bg-sky-50/70 dark:bg-sky-950/30 p-3 space-y-2.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <QrCode className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>
+                        {xamanActivePayload
+                          ? xamanActivePayload.title
+                          : 'Scan With Xaman on Your Android Phone'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowXamanConnectPanel(false);
+                        setXamanActivePayload(null);
+                      }}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white cursor-pointer whitespace-nowrap"
+                    >
+                      Close ✕
+                    </button>
+                  </div>
+
+                  {xamanActivePayload ? (
+                    <div className="flex flex-col items-center text-center gap-2.5 py-1">
+                      {xamanActivePayload.pushed && (
+                        <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                          Push notification sent directly to your paired Android Xaman app — or scan below:
+                        </div>
+                      )}
+                      {xamanActivePayload.qrPng && (
+                        <img
+                          src={xamanActivePayload.qrPng}
+                          alt="Scan with Xaman Wallet on Android"
+                          referrerPolicy="no-referrer"
+                          className="w-44 h-44 rounded-lg border border-slate-200 bg-white p-1.5"
+                        />
+                      )}
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed max-w-xs">
+                        {xamanActivePayload.subtitle}
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <span className="text-[11px] font-mono text-sky-700 dark:text-sky-300">
+                          {xamanPayloadState === 'opened'
+                            ? 'Opened in Xaman — waiting for your slide-to-sign...'
+                            : 'Listening for Android Xaman scan...'}
+                        </span>
+                        <a
+                          href={xamanActivePayload.nextAlways}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-900 dark:bg-sky-600 text-white text-[11px] font-semibold whitespace-nowrap"
+                        >
+                          <span>Open on This Device</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setXamanFallbackTab('dex')}
+                          className={`py-1 px-2 rounded-md font-semibold transition-colors cursor-pointer ${
+                            xamanFallbackTab === 'dex'
+                              ? 'bg-sky-600 text-white'
+                              : 'text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          1. Open Xaman DEX QR
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setXamanFallbackTab('trustline')}
+                          className={`py-1 px-2 rounded-md font-semibold transition-colors cursor-pointer ${
+                            xamanFallbackTab === 'trustline'
+                              ? 'bg-amber-500 text-slate-950'
+                              : 'text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          2. RLUSD TrustLine QR
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col items-center text-center gap-2">
+                        {(xamanFallbackTab === 'dex'
+                          ? xamanFallbackQrUrl
+                          : xamanFallbackTrustlineQrUrl) && (
+                          <img
+                            src={
+                              xamanFallbackTab === 'dex'
+                                ? xamanFallbackQrUrl
+                                : xamanFallbackTrustlineQrUrl
+                            }
+                            alt="Scan with Xaman app on Android"
+                            className="w-40 h-40 rounded-lg border border-slate-200 bg-white p-1.5"
+                          />
+                        )}
+                        <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {xamanFallbackTab === 'dex' ? (
+                            <>
+                              Point your <strong>Android Xaman camera</strong> at this QR to open the{' '}
+                              <strong>XRP / RLUSD DEX</strong> directly on your Android signing wallet,
+                              while keeping your tablet synced to your public{' '}
+                              <span className="font-mono">r...</span> address below.
+                            </>
+                          ) : (
+                            <>
+                              Point your <strong>Android Xaman camera</strong> at this QR to enable the
+                              one-time <strong>RLUSD TrustLine</strong> on your Android wallet (locks 0.2
+                              XRP refundable reserve).
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5">
                 <input
                   type="text"
                   value={walletInput}
                   onChange={(e) => setWalletInput(e.target.value)}
-                  placeholder="Paste public r... address (never seed phrase)"
+                  placeholder="Or paste public r... address to watch balance"
                   className="flex-1 min-w-0 px-2.5 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
                 />
                 <button
@@ -1672,13 +2093,30 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                         One-Time Step 1B Needed: Enable RLUSD so your wallet can receive USD when you sell XRP (locks 0.2 XRP refundable reserve).
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void requestXamanPayload({
+                              kind: 'trustset',
+                              title: 'Scan With Android Xaman to Enable RLUSD',
+                              subtitle:
+                                'Slide to sign this one-time RLUSD TrustLine on your Android Xaman wallet (0.2 XRP refundable reserve).',
+                              instruction:
+                                'Enable one-time RLUSD TrustLine on XRPL so your wallet can receive RLUSD when selling XRP.',
+                            })
+                          }
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <QrCode className="w-3 h-3" />
+                          <span>Scan QR in Android Xaman</span>
+                        </button>
                         <a
                           href={XAMAN_RLUSD_TRUSTLINE_URL}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] whitespace-nowrap shrink-0"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-amber-500/60 bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 font-semibold text-[11px] whitespace-nowrap shrink-0"
                         >
-                          <span>Add RLUSD in Xaman App</span>
+                          <span>Open Xaman App</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                         <button
@@ -1686,7 +2124,7 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                           onClick={() => void handleEnableRlusdTrustlineGemWallet()}
                           className="px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold text-[11px] cursor-pointer whitespace-nowrap shrink-0"
                         >
-                          Desktop Extension TrustLine
+                          Desktop Extension
                         </button>
                       </div>
                     </div>
@@ -1982,19 +2420,97 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                 </div>
               </div>
 
-              {/* PRIMARY FOR ANDROID / PHONE / TABLET USERS WITH XAMAN INSTALLED */}
+              {/* PRIMARY FOR TABLET -> ANDROID XAMAN QR SIGNING */}
               <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-3 space-y-2">
+                <button
+                  type="button"
+                  disabled={dexBusy}
+                  onClick={() =>
+                    void requestXamanPayload({
+                      kind: 'offercreate',
+                      title: `Scan in Android Xaman: ${
+                        xrplStagedOrder.isBuyXrp ? 'BUY' : 'SELL'
+                      } ${xrplStagedOrder.xrpQty} XRP @ $${xrplStagedOrder.limitPrice.toFixed(4)}`,
+                      subtitle: `Pre-filled 1x Spot XRPL OfferCreate (${xrplStagedOrder.xrpQty} XRP ↔ $${xrplStagedOrder.rlusdTotal.toFixed(
+                        2
+                      )} RLUSD). Review and slide to sign on your Android phone.`,
+                      instruction: `${
+                        xrplStagedOrder.isBuyXrp ? 'BUY' : 'SELL'
+                      } ${xrplStagedOrder.xrpQty} XRP @ $${xrplStagedOrder.limitPrice.toFixed(
+                        4
+                      )} ($${xrplStagedOrder.rlusdTotal.toFixed(2)} RLUSD) on XRPL DEX.`,
+                      txjson: xrplStagedOrder.rawOfferCreateJson,
+                    })
+                  }
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold shadow-xs transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  <QrCode className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Step 4 (Tablet → Android): Send to Xaman QR ({xrplStagedOrder.isBuyXrp ? 'Buy' : 'Sell'}{' '}
+                    {xrplStagedOrder.xrpQty} XRP)
+                  </span>
+                </button>
+
+                {showXamanConnectPanel &&
+                  (xamanActivePayload?.kind === 'offercreate' ||
+                    (!xamanActivePayload && xamanFallbackTab === 'dex')) && (
+                    <div className="rounded-lg border border-emerald-500/40 bg-white dark:bg-slate-900 p-3 flex flex-col items-center text-center gap-2">
+                      <div className="w-full flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {xamanActivePayload
+                            ? 'Scan With Android Xaman (1-Swipe Pre-Filled)'
+                            : 'Scan With Android Xaman Camera'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowXamanConnectPanel(false);
+                            setXamanActivePayload(null);
+                          }}
+                          className="text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                        >
+                          Hide ✕
+                        </button>
+                      </div>
+                      {(xamanActivePayload?.qrPng || xamanFallbackQrUrl) && (
+                        <img
+                          src={xamanActivePayload?.qrPng || xamanFallbackQrUrl}
+                          alt="Scan with Xaman Wallet on Android to place XRPL DEX order"
+                          referrerPolicy="no-referrer"
+                          className="w-44 h-44 rounded-lg border border-slate-200 bg-white p-1.5"
+                        />
+                      )}
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {xamanActivePayload ? (
+                          <>
+                            <strong>
+                              {xrplStagedOrder.isBuyXrp ? 'BUY' : 'SELL'} {xrplStagedOrder.xrpQty}{' '}
+                              XRP @ ${xrplStagedOrder.limitPrice.toFixed(4)}
+                            </strong>{' '}
+                            is pre-filled. Review in Android Xaman and slide to sign.
+                          </>
+                        ) : (
+                          <>
+                            Opens <strong>XRP / RLUSD DEX</strong> on Android Xaman for{' '}
+                            <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                              {xrplStagedOrder.isBuyXrp ? 'BUY' : 'SELL'} {xrplStagedOrder.xrpQty}{' '}
+                              XRP @ ${xrplStagedOrder.limitPrice.toFixed(4)}
+                            </span>
+                            .
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
                 <a
                   href={xamanDexDeepLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-emerald-600/50 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-slate-800 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold transition-colors whitespace-nowrap"
                 >
-                  <span>
-                    Step 4 (Phone / Tablet): Open Xaman DEX ({xrplStagedOrder.isBuyXrp ? 'Buy' : 'Sell'}{' '}
-                    {xrplStagedOrder.xrpQty} XRP)
-                  </span>
-                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  <span>Already on Your Android Phone? Open Xaman App Directly</span>
+                  <ExternalLink className="w-3 h-3 shrink-0" />
                 </a>
 
                 <div className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed space-y-1">

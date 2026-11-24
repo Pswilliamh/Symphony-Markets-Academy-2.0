@@ -118,8 +118,8 @@ export const AcademyCampusHub: React.FC<AcademyCampusHubProps> = ({
         </div>
       </section>
 
-      {/* The 4 Core Focused Modules (2x2 Balanced Grid) */}
-      <section aria-label="4 Core Academy Modules" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* The 6 Core Focused Modules (Calm 2-Column Grid) */}
+      <section aria-label="Core Academy Modules" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {CORE_ACADEMY_MODULES.map((mod) => {
           const locked = isTierLocked(mod.requiredTier);
           const isCopied = copiedModuleId === mod.id;
@@ -247,7 +247,7 @@ export const AcademyCampusHub: React.FC<AcademyCampusHubProps> = ({
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
               <span>Optional Deep-Dive</span>
               <span aria-hidden="true">·</span>
-              <span>Hidden from Main 4-Module Flow to Keep Students Calm</span>
+              <span>Hidden from Main Module Flow to Keep Students Calm</span>
             </div>
             <div className="text-sm font-bold text-slate-900 dark:text-white">
               Extra Labs: Live AI Market Examiner, 11-Skill Desk &amp; 24/7 DEX Architecture
@@ -322,7 +322,7 @@ export const AcademyCampusHub: React.FC<AcademyCampusHubProps> = ({
         <div className="text-xs font-bold text-slate-900 dark:text-white">
           Instructor Direct-Link Directory (Each Link Opens Only That Module With Its Own Clean Header)
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
           {ACADEMY_MODULES.filter((m) => m.isCoreModule).map((m) => (
             <button
               key={m.id}

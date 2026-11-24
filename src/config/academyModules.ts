@@ -6,6 +6,8 @@ export type AcademyModuleId =
   | 'fibonacci'
   | 'trade-desk'
   | 'library'
+  | 'ksbc'
+  | 'forex'
   | 'bonus-labs';
 
 export type WorkshopChapterId =
@@ -25,7 +27,9 @@ export type WorkshopChapterId =
   | 'risk-chart'
   | 'ten-set-auto-trader'
   | 'ai-dex-lab'
-  | 'open-library';
+  | 'open-library'
+  | 'ksbc-gold'
+  | 'forex-guide';
 
 export interface ModuleLessonMeta {
   id: WorkshopChapterId;
@@ -216,6 +220,52 @@ export const ACADEMY_MODULES: AcademyModuleMeta[] = [
         stepNumber: '01',
         tabLabel: 'Videos, Podcast & PDFs',
         fullTitle: 'Open Media, Course Videos & Document Reading Room',
+      },
+    ],
+  },
+  {
+    id: 'ksbc',
+    numberLabel: 'Module 05',
+    title: 'KSBC Gold RWA Blueprint',
+    standaloneBrandTitle: 'KSBC Gold RWA Blueprint',
+    accessLabel: 'Open Access · Gold-Backed RWA Study',
+    requiredTier: 'beginner',
+    summary:
+      'Interactive Kingdom Symphony Bible Coin (KSBC) training module: crystalline gold reserve transparency, XRPL TrustLine mechanics, and collateral safety cushion math.',
+    audienceNote: 'Best standalone link for gold-backed RWA & open-math transparency classes.',
+    isCoreModule: true,
+    accentTextClass: 'text-amber-700 dark:text-amber-400',
+    accentButtonClass: 'bg-amber-600 hover:bg-amber-500 text-white',
+    lessons: [
+      {
+        id: 'ksbc-gold',
+        moduleId: 'ksbc',
+        stepNumber: '01',
+        tabLabel: 'KSBC Crystalline Gold Lab',
+        fullTitle: 'KSBC Gold-Backed RWA Architecture & Crystalline Proof Lab',
+      },
+    ],
+  },
+  {
+    id: 'forex',
+    numberLabel: 'Module 06',
+    title: 'Forex Foundations & Visual Chart Guide',
+    standaloneBrandTitle: 'Forex Visual Learning Guide',
+    accessLabel: 'Open Access · Illustrated Learning',
+    requiredTier: 'beginner',
+    summary:
+      'A calm, illustrated Forex learning module with visual currency-pair scales, interactive 24-hour Tokyo/London/NY session charts, annotated Fibonacci chart examples, and micro-lot safety math.',
+    audienceNote: 'Best standalone link for students asking how Symphony Markets methods apply to Forex.',
+    isCoreModule: true,
+    accentTextClass: 'text-sky-700 dark:text-sky-400',
+    accentButtonClass: 'bg-sky-600 hover:bg-sky-500 text-white',
+    lessons: [
+      {
+        id: 'forex-guide',
+        moduleId: 'forex',
+        stepNumber: '01',
+        tabLabel: 'Pairs, Sessions & Charts',
+        fullTitle: 'Forex Foundations: Currency Pairs, Sessions, Example Charts & Micro-Lot Safety',
       },
     ],
   },
