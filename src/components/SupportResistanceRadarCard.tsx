@@ -11,9 +11,11 @@ import {
   Send,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Target,
   TrendingDown,
   TrendingUp,
+  Volume2,
 } from 'lucide-react';
 import { AssetSymbol, Candle, FibonacciLevel, PriceAlert } from '../types/market';
 import { playFibonacciHarmonicInterval } from '../utils/tenSetSymphonyAudio';
@@ -261,20 +263,65 @@ export const SupportResistanceRadarCard: React.FC<SupportResistanceRadarCardProp
   }, [alertsArmed, srLevels, symbol, baseAsset, safeLive, decimals, onNotifyBanner, ntfyTopic]);
 
   const handleRequestBrowserNotifications = async () => {
+    // Always arm in-app banner + harmonic chime immediately regardless of iframe OS Notification restrictions
+    setAlertsArmed(true);
+    playFibonacciHarmonicInterval({ rootHz: 432, targetHz: 528, tone: 'harp' });
+
     if (typeof window === 'undefined' || !('Notification' in window)) {
       setBrowserNotifStatus('unsupported');
+      onNotifyBanner(
+        `Live In-App Chime & Banner Alerts are ACTIVE for ${baseAsset}! (Support $${srLevels.primarySupport.toFixed(
+          decimals
+        )} · Resistance $${srLevels.primaryResistance.toFixed(decimals)})`
+      );
       return;
     }
+
+    if (Notification.permission === 'denied') {
+      setBrowserNotifStatus('denied');
+      onNotifyBanner(
+        `Live In-App Chime & Banner Alerts are ACTIVE! (Browser OS pop-ups are restricted inside embedded frames — use Channel 2 ntfy below for phone lock-screen alerts.)`
+      );
+      return;
+    }
+
     try {
       const perm = await Notification.requestPermission();
       setBrowserNotifStatus(perm);
-      if (perm === 'granted') {
-        setAlertsArmed(true);
-        onNotifyBanner('Live Support & Resistance notifications enabled for this device.');
-      }
+      onNotifyBanner(
+        perm === 'granted'
+          ? `Live Support & Resistance alerts + browser pop-ups enabled for ${baseAsset}!`
+          : `Live In-App Chime & Banner Alerts are ACTIVE for ${baseAsset}!`
+      );
     } catch {
       setBrowserNotifStatus('denied');
+      onNotifyBanner(`Live In-App Chime & Banner Alerts are ACTIVE for ${baseAsset}!`);
     }
+  };
+
+  const handleTestInAppChimeAndBanner = () => {
+    setAlertsArmed(true);
+    playFibonacciHarmonicInterval({ rootHz: 432, targetHz: 528, tone: 'harp' });
+    const msg = `Test Alert (${baseAsset}): Live $${safeLive.toFixed(
+      decimals
+    )} · Support Buy $${srLevels.primarySupport.toFixed(
+      decimals
+    )} · Resistance Sell $${srLevels.primaryResistance.toFixed(decimals)}.`;
+    onNotifyBanner(msg);
+    const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setRecentAlertLog((prev) => [
+      { time: timeLabel, zone: 'SUPPORT', message: msg },
+      ...prev.slice(0, 4),
+    ]);
+  };
+
+  const handleGeneratePrivateNtfyChannel = () => {
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const generated = `symphony-xrp-${rand}`;
+    setNtfyTopic(generated);
+    setNtfyFeedback(
+      `Created your private channel "${generated}". Paste this exact name into the free Android ntfy app (+ Subscribe), then tap Test Ping!`
+    );
   };
 
   // Compute the active Limit Buy & Limit Sell Recipe (from Live S/R OR any of the 10 Auto-Trader Setups)
@@ -647,48 +694,101 @@ export const SupportResistanceRadarCard: React.FC<SupportResistanceRadarCardProp
                   </div>
                 </div>
 
-                {/* Channel 1: Browser / Tablet Notifications */}
-                <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 space-y-2">
+                {/* Channel 1: Live In-App Chime & Alert Banner (Works 100% Immediately — No OS Popup Needed) */}
+                <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      1. Tablet / Browser Pop-Up + Chime
+                      1. Tablet Live Chime &amp; Banner Alerts
                     </span>
-                    <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                      {browserNotifStatus === 'granted'
-                        ? 'Enabled'
-                        : browserNotifStatus === 'denied'
-                        ? 'Blocked'
-                        : 'Optional'}
+                    <span
+                      className={`font-mono text-[11px] font-semibold ${
+                        alertsArmed
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {alertsArmed ? 'Active ✓' : 'Ready'}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleRequestBrowserNotifications()}
-                    className="w-full py-1.5 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-semibold text-slate-800 dark:text-slate-200 cursor-pointer"
-                  >
-                    {browserNotifStatus === 'granted'
-                      ? 'Browser Notifications Active ✓'
-                      : 'Allow Tablet / Browser Notifications'}
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (alertsArmed) {
+                          setAlertsArmed(false);
+                          onNotifyBanner(`Paused live ${baseAsset} Support & Resistance chime alerts.`);
+                        } else {
+                          void handleRequestBrowserNotifications();
+                        }
+                      }}
+                      className={`py-2 px-3 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                        alertsArmed
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          : 'bg-sky-600 hover:bg-sky-500 text-white'
+                      }`}
+                    >
+                      {alertsArmed ? 'Alerts Active ✓ (Pause)' : 'Activate Live Alerts'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTestInAppChimeAndBanner}
+                      className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-semibold text-slate-800 dark:text-slate-200 cursor-pointer"
+                    >
+                      <Volume2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>Test Chime Now</span>
+                    </button>
+                  </div>
+
+                  {browserNotifStatus === 'denied' && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Browser OS pop-ups are restricted inside this preview frame — your{' '}
+                      <strong>Live Chime &amp; Banner</strong> above and{' '}
+                      <strong>Android Phone Push</strong> below still work 100%!
+                    </p>
+                  )}
                 </div>
 
                 {/* Channel 2: Free Android Lock-Screen Push via ntfy */}
                 <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 space-y-2">
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">
-                    2. Free Android Phone Push (ntfy App · Zero Account)
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-semibold text-slate-800 dark:text-slate-200">
+                      2. Free Android Phone Push (ntfy App · Screen Off)
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleGeneratePrivateNtfyChannel}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 shrink-0" />
+                      <span>Generate Channel</span>
+                    </button>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Install the free <strong>ntfy</strong> app on Android, subscribe to your own
-                    private topic name, and enter that same name here:
+                    Tap <strong>Generate Channel</strong>, subscribe to that exact name in the free{' '}
+                    <strong>ntfy</strong> Android app (no account), then tap <strong>Test Ping</strong>:
                   </p>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="text"
                       value={ntfyTopic}
                       onChange={(e) => setNtfyTopic(e.target.value)}
-                      placeholder="e.g. symphony-xrp-alerts-782"
+                      placeholder="e.g. symphony-xrp-4821"
                       className="flex-1 min-w-0 px-2.5 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs text-slate-900 dark:text-white"
                     />
+                    {ntfyTopic.trim().length >= 6 && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyText('ntfy_topic', ntfyTopic.trim())}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        {copiedKey === 'ntfy_topic' ? (
+                          <Check className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={ntfySending || ntfyTopic.trim().length < 6}

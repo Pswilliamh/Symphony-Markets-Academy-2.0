@@ -214,12 +214,14 @@ export const TenSetAutoTraderLab: React.FC<TenSetAutoTraderLabProps> = ({
   });
   const [trustWalletAddress, setTrustWalletAddress] = useState<string>(() => {
     try {
-      return (
+      const saved =
+        localStorage.getItem('symphony_user_xaman_address_v1') ||
         localStorage.getItem('symphony_last_wallet_addr_v2') ||
-        'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh'
-      );
+        '';
+      if (!saved || saved === 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh') return '';
+      return saved;
     } catch {
-      return 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh';
+      return '';
     }
   });
   const [walletConnected, setWalletConnected] = useState<boolean>(false);

@@ -37,6 +37,7 @@ import { XrplCameraQrScanner } from './XrplCameraQrScanner';
 const XRPL_RLUSD_ISSUER = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De';
 const XRPL_RLUSD_HEX = '524C555344000000000000000000000000000000';
 const XAMAN_RLUSD_TRUSTLINE_URL = `https://xrpl.services/?issuer=${XRPL_RLUSD_ISSUER}&currency=${XRPL_RLUSD_HEX}&limit=100000`;
+const SOLOGENIC_XRP_RLUSD_URL = `https://sologenic.org/trade?market=XRP%2F${XRPL_RLUSD_HEX}%2B${XRPL_RLUSD_ISSUER}`;
 
 export interface ImportedAutoTraderDexSet {
   nonce: number;
@@ -388,6 +389,20 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
     },
     [walletInput, onChangeXrplAddress]
   );
+
+  // Keep Step 1 wallet input in lockstep with the top-of-screen Sync My Xaman Wallet bar
+  useEffect(() => {
+    const clean = (connectedXrplAddress || '').trim();
+    setWalletInput(clean);
+    if (!clean) {
+      setAcctSnapshot(null);
+      setXamanConnectedViaQr(false);
+      return;
+    }
+    if (/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(clean) && executionMode === 'xrpl_dex') {
+      void syncXrplAccount(clean);
+    }
+  }, [connectedXrplAddress, executionMode]);
 
   // Automatically load live XRPL CLOB when switching to Embedded XRPL DEX mode
   useEffect(() => {
@@ -1850,34 +1865,55 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
             {/* ==============================================================
              * STEP 1: DIRECT ANDROID XAMAN QR CONNECT + PUBLIC r... SYNC
              * ============================================================== */}
-            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2.5">
+            <div
+              id="xrpl-step1-wallet"
+              className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-2.5"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <Wallet className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span>Step 1 · Connect Android Xaman Wallet (Scan QR)</span>
+                  <span>Step 1 · Connect Your Android Xaman Wallet</span>
                 </span>
-                {acctSnapshot?.activated && (
-                  <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                    {xamanConnectedViaQr ? '✓ Xaman Paired' : '✓ Synced'}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {acctSnapshot?.activated && (
+                    <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                      {xamanConnectedViaQr ? '✓ Xaman Paired' : '✓ Synced'}
+                    </span>
+                  )}
+                  {(walletInput.trim() || acctSnapshot) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWalletInput('');
+                        setAcctSnapshot(null);
+                        setXamanConnectedViaQr(false);
+                        setDexStatusMsg(null);
+                        setDexErrorMsg(null);
+                        onChangeXrplAddress?.('');
+                      }}
+                      className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Primary Tablet <-> Android Xaman Two-Way QR Buttons (100% API-Key-Free) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {/* Primary Tablet <-> Android Xaman Two-Way QR Buttons (Stacked so text never clips) */}
+              <div className="flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setShowTabletCameraScanner((v) => !v);
                     setShowXamanConnectPanel(false);
                   }}
-                  className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors cursor-pointer"
                 >
                   <Camera className="w-3.5 h-3.5 shrink-0" />
                   <span>
                     {showTabletCameraScanner
-                      ? 'Close Tablet Camera'
-                      : 'Scan Android Receive QR'}
+                      ? 'Close Tablet Camera Scanner'
+                      : 'Scan My Android Xaman Receive QR'}
                   </span>
                 </button>
 
@@ -1893,17 +1929,19 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                         kind: 'signin',
                         title: 'Scan With Xaman on Your Android Phone',
                         subtitle:
-                          'Open Xaman on Android → tap the blue center Scan icon → scan this QR code and slide to connect your wallet to this tablet.',
+                          'Open Xaman on Android → tap the blue center Scan icon → scan this QR code to open XRP / RLUSD DEX or RLUSD TrustLine.',
                         instruction:
                           'Connect your Android Xaman wallet to Symphony Markets Academy XRP Trade Desk.',
                       });
                     }
                   }}
-                  className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white text-xs font-bold transition-colors cursor-pointer"
                 >
                   <Smartphone className="w-3.5 h-3.5 shrink-0" />
                   <span>
-                    {showXamanConnectPanel ? 'Hide Xaman QR' : 'Show QR for Android Xaman'}
+                    {showXamanConnectPanel
+                      ? 'Hide Xaman QR Panel'
+                      : 'Show QR to Open Xaman DEX / TrustLine'}
                   </span>
                 </button>
               </div>
@@ -2420,8 +2458,8 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                 </div>
               </div>
 
-              {/* PRIMARY FOR TABLET -> ANDROID XAMAN QR SIGNING */}
-              <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-3 space-y-2">
+              {/* PRIMARY FOR TABLET -> ANDROID XAMAN STEP-BY-STEP EXECUTION */}
+              <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-3 space-y-2.5">
                 <button
                   type="button"
                   disabled={dexBusy}
@@ -2442,11 +2480,11 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                       txjson: xrplStagedOrder.rawOfferCreateJson,
                     })
                   }
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold shadow-xs transition-colors whitespace-nowrap cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   <QrCode className="w-3.5 h-3.5 shrink-0" />
                   <span>
-                    Step 4 (Tablet → Android): Send to Xaman QR ({xrplStagedOrder.isBuyXrp ? 'Buy' : 'Sell'}{' '}
+                    Step 4 · Open Xaman DEX QR ({xrplStagedOrder.isBuyXrp ? 'Buy' : 'Sell'}{' '}
                     {xrplStagedOrder.xrpQty} XRP)
                   </span>
                 </button>
@@ -2459,7 +2497,7 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                         <span className="font-bold text-slate-900 dark:text-white">
                           {xamanActivePayload
                             ? 'Scan With Android Xaman (1-Swipe Pre-Filled)'
-                            : 'Scan With Android Xaman Camera'}
+                            : '1. Scan to Open XRP / RLUSD DEX in Xaman'}
                         </span>
                         <button
                           type="button"
@@ -2477,69 +2515,104 @@ export const RiskSimulatorPanel: React.FC<RiskSimulatorPanelProps> = ({
                           src={xamanActivePayload?.qrPng || xamanFallbackQrUrl}
                           alt="Scan with Xaman Wallet on Android to place XRPL DEX order"
                           referrerPolicy="no-referrer"
-                          className="w-44 h-44 rounded-lg border border-slate-200 bg-white p-1.5"
+                          className="w-40 h-40 rounded-lg border border-slate-200 bg-white p-1.5"
                         />
                       )}
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        {xamanActivePayload ? (
-                          <>
-                            <strong>
-                              {xrplStagedOrder.isBuyXrp ? 'BUY' : 'SELL'} {xrplStagedOrder.xrpQty}{' '}
-                              XRP @ ${xrplStagedOrder.limitPrice.toFixed(4)}
-                            </strong>{' '}
-                            is pre-filled. Review in Android Xaman and slide to sign.
-                          </>
-                        ) : (
-                          <>
-                            Opens <strong>XRP / RLUSD DEX</strong> on Android Xaman for{' '}
-                            <span className="font-mono font-semibold text-slate-900 dark:text-white">
-                              {xrplStagedOrder.isBuyXrp ? 'BUY' : 'SELL'} {xrplStagedOrder.xrpQty}{' '}
-                              XRP @ ${xrplStagedOrder.limitPrice.toFixed(4)}
-                            </span>
-                            .
-                          </>
-                        )}
-                      </p>
+                      {!xamanActivePayload && (
+                        <div className="w-full rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300/60 dark:border-amber-500/30 px-2.5 py-2 text-left text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                          <strong>Why Xaman opens blank:</strong> Without a KYC Xaman Developer API
+                          key, Xaman&apos;s security rules only let this QR open the{' '}
+                          <strong>XRP / RLUSD DEX</strong> screen — it will not auto-fill your
+                          numbers. Simply enter the <strong>3 exact values below</strong> inside
+                          Xaman and slide to sign!
+                        </div>
+                      )}
                     </div>
                   )}
 
-                <a
-                  href={xamanDexDeepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-emerald-600/50 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-slate-800 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold transition-colors whitespace-nowrap"
-                >
-                  <span>Already on Your Android Phone? Open Xaman App Directly</span>
-                  <ExternalLink className="w-3 h-3 shrink-0" />
-                </a>
+                {/* Crystal-Clear 4-Step Xaman Entry Ticket */}
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 space-y-2 text-[11px] text-slate-800 dark:text-slate-200">
+                  <div className="font-bold text-slate-900 dark:text-white">
+                    Inside Xaman DEX on Android, enter these exact values:
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-500 dark:text-slate-400">1. Pair &amp; Tab:</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        XRP/RLUSD · {xrplStagedOrder.isBuyXrp ? 'BUY XRP' : 'SELL XRP'} · Limit
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-500 dark:text-slate-400">2. Limit Price:</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyHelper('price', xrplStagedOrder.limitPrice.toFixed(4))
+                        }
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-mono font-bold text-emerald-700 dark:text-emerald-400 cursor-pointer"
+                      >
+                        <span>${xrplStagedOrder.limitPrice.toFixed(4)}</span>
+                        <Copy className="w-3 h-3" />
+                        <span>{copiedField === 'price' ? 'Copied!' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-500 dark:text-slate-400">3. Amount (XRP):</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyHelper('qty', String(xrplStagedOrder.xrpQty))}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-mono font-bold text-sky-700 dark:text-sky-400 cursor-pointer"
+                      >
+                        <span>
+                          {xrplStagedOrder.xrpQty} XRP (${xrplStagedOrder.rlusdTotal.toFixed(2)})
+                        </span>
+                        <Copy className="w-3 h-3" />
+                        <span>{copiedField === 'qty' ? 'Copied!' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 pt-0.5">
+                      <strong>4. Execute:</strong> Tap <strong>Place Order</strong> in Xaman and{' '}
+                      <strong>Slide to Sign</strong>. Your Limit order stays active 24/7 on the XRP
+                      Ledger even when your screen is off.
+                    </div>
+                  </div>
+                </div>
 
-                <div className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed space-y-1">
-                  <div className="font-semibold">
-                    When Xaman opens on your tablet/phone, enter these 2 exact numbers:
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono">
-                      1. Tap <strong>{xrplStagedOrder.isBuyXrp ? 'Buy XRP' : 'Sell XRP'}</strong>
+                {/* Verify Order Right After Signing */}
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    disabled={acctLoading || !/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(walletInput.trim())}
+                    onClick={() => void syncXrplAccount(walletInput.trim())}
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 disabled:opacity-50 text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${acctLoading ? 'animate-spin' : ''}`} />
+                    <span>
+                      {acctLoading
+                        ? 'Checking XRPL Ledger...'
+                        : 'I Signed in Xaman — Verify My Live Order on XRPL'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyHelper('qty', String(xrplStagedOrder.xrpQty))}
-                      className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-semibold hover:border-emerald-500 cursor-pointer"
-                    >
-                      2. Amount: {xrplStagedOrder.xrpQty} XRP{' '}
-                      {copiedField === 'qty' ? '✓ Copied' : '(Copy)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCopyHelper('price', xrplStagedOrder.limitPrice.toFixed(4))
-                      }
-                      className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono font-semibold hover:border-emerald-500 cursor-pointer"
-                    >
-                      3. Price: ${xrplStagedOrder.limitPrice.toFixed(4)}{' '}
-                      {copiedField === 'price' ? '✓ Copied' : '(Copy)'}
-                    </button>
-                  </div>
+                  </button>
+
+                  <a
+                    href={SOLOGENIC_XRP_RLUSD_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-sky-500/50 bg-white dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 text-sky-800 dark:text-sky-300 text-[11px] font-semibold transition-colors"
+                  >
+                    <span>Or Trade XRP/RLUSD on Sologenic DEX (Pre-Filled Xaman Sign)</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+
+                  <a
+                    href={xamanDexDeepLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-semibold transition-colors"
+                  >
+                    <span>Already on Your Android Phone? Open Xaman App Directly</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
                 </div>
               </div>
 

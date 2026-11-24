@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Camera,
   Check,
   CheckCircle2,
   Copy,
@@ -14,6 +15,8 @@ import {
   KeyRound,
   Layers,
   Lock,
+  Wallet,
+  X,
 } from 'lucide-react';
 import { AcademyCampusHub } from './components/AcademyCampusHub';
 import {
@@ -50,6 +53,7 @@ import { StartHereRoadmap } from './components/StartHereRoadmap';
 import { SupportResistanceRadarCard } from './components/SupportResistanceRadarCard';
 import { SymphonyCandlestickBackdrop, SymphonyHarpLogo } from './components/SymphonyHarpLogo';
 import { TenSetAutoTraderLab } from './components/TenSetAutoTraderLab';
+import { XrplCameraQrScanner } from './components/XrplCameraQrScanner';
 import {
   AcademyAdminSettingsState,
   AcademyPublicGatesState,
@@ -232,31 +236,8 @@ export default function App() {
     },
   ]);
 
-  // Read-Only Public Wallets State
-  const [watchedWallets, setWatchedWallets] = useState<WatchedWallet[]>([
-    {
-      id: 'wal_1',
-      label: 'Trust Wallet Cold Reserve (Read-Only)',
-      network: 'XRPL',
-      address: 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh',
-      xrpBalance: 4250,
-      xlmBalance: 0,
-      usdtBalance: 1500,
-      lastSynced: 'Live Sync',
-      isLiveChain: false,
-    },
-    {
-      id: 'wal_2',
-      label: 'Stellar DEX Liquidity Watch',
-      network: 'Stellar',
-      address: 'GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGSNFHEYVXM3XOJMDS674JZ',
-      xrpBalance: 0,
-      xlmBalance: 12800,
-      usdtBalance: 850,
-      lastSynced: 'Live Sync',
-      isLiveChain: false,
-    },
-  ]);
+  // Read-Only Public Wallets State (Starts empty so only the user's own wallet addresses appear)
+  const [watchedWallets, setWatchedWallets] = useState<WatchedWallet[]>([]);
 
   // Strategy Bot Sandbox State
   const [botStrategies, setBotStrategies] = useState<BotStrategyConfig[]>([
@@ -313,9 +294,37 @@ export default function App() {
   ]);
 
   const [alertBanner, setAlertBanner] = useState<string | null>(null);
-  const [embeddedXrplAddress, setEmbeddedXrplAddress] = useState<string>('');
+  const [embeddedXrplAddress, setEmbeddedXrplAddress] = useState<string>(() => {
+    try {
+      const saved = (localStorage.getItem('symphony_user_xaman_address_v1') || '').trim();
+      // Never pre-fill legacy Binance public demo address
+      if (!saved || saved === 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh') return '';
+      return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(saved) ? saved : '';
+    } catch {
+      return '';
+    }
+  });
+  const [topWalletDraft, setTopWalletDraft] = useState<string>(embeddedXrplAddress);
+  const [showTopWalletSyncDrawer, setShowTopWalletSyncDrawer] = useState<boolean>(false);
+  const [showTopWalletCameraScanner, setShowTopWalletCameraScanner] = useState<boolean>(false);
   const [importedXrplDexSet, setImportedXrplDexSet] =
     useState<ImportedAutoTraderDexSet | null>(null);
+
+  const handleSaveUserXrplAddress = (nextAddr: string) => {
+    const clean = nextAddr.trim();
+    const safeAddr = clean === 'rEb8TK3gBgk5auZkwc6sHnwrGVJH8DuaLh' ? '' : clean;
+    setEmbeddedXrplAddress(safeAddr);
+    setTopWalletDraft(safeAddr);
+    try {
+      if (safeAddr) {
+        localStorage.setItem('symphony_user_xaman_address_v1', safeAddr);
+      } else {
+        localStorage.removeItem('symphony_user_xaman_address_v1');
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   // Sync Dark Mode class on <html>
   useEffect(() => {
@@ -943,8 +952,26 @@ export default function App() {
               })}
             </nav>
 
-            {/* Zone 3: 1 Primary Action */}
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Zone 3: Quick Wallet Sync (Trade Desk) + Primary Action */}
+            <div className="flex items-center gap-2 shrink-0">
+              {activeModule.id === 'trade-desk' && (
+                <button
+                  type="button"
+                  onClick={() => setShowTopWalletSyncDrawer((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    embeddedXrplAddress
+                      ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
+                      : 'border-sky-500/60 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50'
+                  }`}
+                >
+                  <Wallet className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-mono">
+                    {embeddedXrplAddress
+                      ? `${embeddedXrplAddress.slice(0, 6)}...${embeddedXrplAddress.slice(-4)}`
+                      : 'Sync Xaman Wallet'}
+                  </span>
+                </button>
+              )}
               {activeModuleLocked || isAdminUser ? (
                 <button
                   type="button"
@@ -1698,14 +1725,139 @@ export default function App() {
 
               {activeLesson.id === 'risk-chart' && (
                 <div id="risk-chart" className="space-y-6">
+                  {/* Top-of-Screen Sync Your Xaman Wallet Bar (Always Visible & Instant Sync) */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <div
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                            embeddedXrplAddress
+                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+                              : 'bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-400 border border-sky-500/30'
+                          }`}
+                        >
+                          <Wallet className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                              {embeddedXrplAddress
+                                ? 'Your Synced Xaman Wallet (Read-Only Live Watch)'
+                                : 'Sync Your Own Xaman Wallet Address'}
+                            </h2>
+                            {embeddedXrplAddress && (
+                              <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                                {embeddedXrplAddress.slice(0, 10)}...{embeddedXrplAddress.slice(-6)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {embeddedXrplAddress
+                              ? 'Synced across the checklist, radar, and XRPL DEX below. Only your public r... address is stored — your signing keys stay 100% inside Android Xaman.'
+                              : 'Scan your Android Xaman Receive QR with this tablet camera, or paste your own public r... address below (never shares your secret keys).'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowTopWalletSyncDrawer(true);
+                            setShowTopWalletCameraScanner((v) => !v);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <Camera className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            {showTopWalletCameraScanner
+                              ? 'Close Camera'
+                              : 'Scan Android Receive QR'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowTopWalletSyncDrawer((v) => !v)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          <span>
+                            {showTopWalletSyncDrawer
+                              ? 'Hide Wallet Box'
+                              : embeddedXrplAddress
+                              ? 'Change Address'
+                              : 'Paste r... Address'}
+                          </span>
+                        </button>
+                        {embeddedXrplAddress && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSaveUserXrplAddress('');
+                              setAlertBanner('Cleared saved Xaman wallet address. You can sync your own r... address anytime.');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-rose-500/40 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5 shrink-0" />
+                            <span>Clear</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {(showTopWalletSyncDrawer || !embeddedXrplAddress) && (
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <input
+                            type="text"
+                            value={topWalletDraft}
+                            onChange={(e) => setTopWalletDraft(e.target.value)}
+                            placeholder="Paste your own public Xaman XRPL address starting with r..."
+                            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono text-xs text-slate-900 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const trimmed = topWalletDraft.trim();
+                              if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(trimmed)) {
+                                setAlertBanner(
+                                  'Please enter a valid public XRPL address starting with "r" (25–35 characters), or tap Scan Android Receive QR.'
+                                );
+                                return;
+                              }
+                              handleSaveUserXrplAddress(trimmed);
+                              setShowTopWalletSyncDrawer(false);
+                              setShowTopWalletCameraScanner(false);
+                              setAlertBanner(
+                                `Synced your Xaman wallet (${trimmed.slice(0, 8)}...${trimmed.slice(-5)}) across the Trade Desk!`
+                              );
+                            }}
+                            className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            Sync My Xaman Wallet
+                          </button>
+                        </div>
+
+                        {showTopWalletCameraScanner && (
+                          <XrplCameraQrScanner
+                            onClose={() => setShowTopWalletCameraScanner(false)}
+                            onAddressScanned={(scannedAddr) => {
+                              setShowTopWalletCameraScanner(false);
+                              setShowTopWalletSyncDrawer(false);
+                              handleSaveUserXrplAddress(scannedAddr);
+                              setAlertBanner(
+                                `Scanned your Android Xaman Receive QR (${scannedAddr.slice(0, 8)}...${scannedAddr.slice(-5)}) — Synced across Trade Desk!`
+                              );
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <OneByOneTradeChecklist
                     contextStep="step14"
                     xrpLivePrice={xrpLive}
-                    connectedXrplAddress={
-                      embeddedXrplAddress ||
-                      watchedWallets.find((w) => w.network === 'XRPL')?.address ||
-                      ''
-                    }
+                    connectedXrplAddress={embeddedXrplAddress}
                     checklistState={oneByOneChecklist}
                     onChangeChecklistState={setOneByOneChecklist}
                     onLoadSetIntoDex={(payload) => {
@@ -1715,7 +1867,7 @@ export default function App() {
                       setTradeSide('long');
                       setShowRiskOverlay(true);
                       if (payload.walletAddress) {
-                        setEmbeddedXrplAddress(payload.walletAddress);
+                        handleSaveUserXrplAddress(payload.walletAddress);
                       }
                       setImportedXrplDexSet({
                         ...payload,
@@ -1736,11 +1888,7 @@ export default function App() {
                     livePrice={livePrice}
                     candles={activeCandles}
                     fibLevels={fibLevels}
-                    connectedXrplAddress={
-                      embeddedXrplAddress ||
-                      watchedWallets.find((w) => w.network === 'XRPL')?.address ||
-                      ''
-                    }
+                    connectedXrplAddress={embeddedXrplAddress}
                     onLoadSetIntoDex={(payload) => {
                       handleSelectSymbol('XRPUSDT');
                       setInstrument('spot');
@@ -1748,7 +1896,7 @@ export default function App() {
                       setTradeSide('long');
                       setShowRiskOverlay(true);
                       if (payload.walletAddress) {
-                        setEmbeddedXrplAddress(payload.walletAddress);
+                        handleSaveUserXrplAddress(payload.walletAddress);
                       }
                       setImportedXrplDexSet({
                         ...payload,
@@ -1936,12 +2084,8 @@ export default function App() {
                         leverage={leverage}
                         onLeverageChange={setLeverage}
                         onOpenPaperPosition={handleOpenPaperPosition}
-                        connectedXrplAddress={
-                          embeddedXrplAddress ||
-                          watchedWallets.find((w) => w.network === 'XRPL')?.address ||
-                          ''
-                        }
-                        onChangeXrplAddress={(addr) => setEmbeddedXrplAddress(addr)}
+                        connectedXrplAddress={embeddedXrplAddress}
+                        onChangeXrplAddress={(addr) => handleSaveUserXrplAddress(addr)}
                         onSwitchToXrpSymbol={() => handleSelectSymbol('XRPUSDT')}
                         importedTenSet={importedXrplDexSet}
                       />
@@ -1955,11 +2099,7 @@ export default function App() {
                   <OneByOneTradeChecklist
                     contextStep="step15"
                     xrpLivePrice={xrpLive}
-                    connectedXrplAddress={
-                      embeddedXrplAddress ||
-                      watchedWallets.find((w) => w.network === 'XRPL')?.address ||
-                      ''
-                    }
+                    connectedXrplAddress={embeddedXrplAddress}
                     checklistState={oneByOneChecklist}
                     onChangeChecklistState={setOneByOneChecklist}
                     onLoadSetIntoDex={(payload) => {
