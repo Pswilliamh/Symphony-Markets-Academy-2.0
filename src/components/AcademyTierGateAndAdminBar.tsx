@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
+  Copy,
+  ExternalLink,
   Eye,
   KeyRound,
   Lock,
@@ -432,6 +434,7 @@ export const AcademyAdminConsoleModal: React.FC<AcademyAdminConsoleModalProps> =
     adminSettings.secondaryAdminEmail
   );
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  const [copiedCurrentHost, setCopiedCurrentHost] = useState<boolean>(false);
 
   React.useEffect(() => {
     setDraftIntCode(adminSettings.intermediatePasscodeLabel || DEFAULT_INTERMEDIATE_PASSCODE);
@@ -617,7 +620,54 @@ export const AcademyAdminConsoleModal: React.FC<AcademyAdminConsoleModalProps> =
           )}
 
           {authError && (
-            <p className="text-xs text-rose-600 dark:text-rose-400">{authError}</p>
+            <div className="space-y-2">
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{authError}</p>
+              {authError.includes('unauthorized-domain') && typeof window !== 'undefined' && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50/80 dark:bg-amber-950/30 p-3 text-xs text-amber-950 dark:text-amber-200 space-y-2 leading-relaxed">
+                  <div className="font-bold">
+                    Quick 30-Second Fix for Your Vercel / Custom Domain:
+                  </div>
+                  <p>
+                    Firebase protects Google Sign-In with an Authorized Domains list. Add your
+                    current domain once in Firebase Console:
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="px-2 py-1 rounded bg-white dark:bg-slate-900 border border-amber-300/60 dark:border-amber-500/30 font-mono text-[11px] font-semibold text-slate-900 dark:text-white">
+                      {window.location.hostname}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (navigator.clipboard?.writeText) {
+                          void navigator.clipboard.writeText(window.location.hostname);
+                        }
+                        setCopiedCurrentHost(true);
+                        setTimeout(() => setCopiedCurrentHost(false), 2000);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-800 dark:text-slate-200 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>{copiedCurrentHost ? 'Copied!' : 'Copy Domain'}</span>
+                    </button>
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0139446450/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold"
+                    >
+                      <span>Open Firebase Authorized Domains</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                    In Firebase Console → <strong>Authorized domains</strong> → click{' '}
+                    <strong>Add domain</strong> → paste <strong>{window.location.hostname}</strong>{' '}
+                    → Refresh this page. (Meanwhile, you can enter your cohort passcode in the box
+                    above to unlock Module 2 &amp; 3 right away!)
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   Download,
@@ -14,7 +14,10 @@ import goldRwaBlueprintImg from '../assets/images/infographic_gold_rwa_blueprint
 import noScamCompassImg from '../assets/images/no_scam_compass_1794561548457.jpg';
 import videoCoverStopsImg from '../assets/images/video_cover_stops_1794561549253.jpg';
 import videoCoverWalletImg from '../assets/images/video_cover_wallet_1794561551281.jpg';
-import { createNoScamZonePdfBlob } from '../utils/pdfGuideGenerator';
+import {
+  createFunctionalOperationsManualPdfBlob,
+  createNoScamZonePdfBlob,
+} from '../utils/pdfGuideGenerator';
 import { SymphonyPodcastPlayer } from './SymphonyPodcastPlayer';
 
 export interface OpenMediaAndDocumentLibraryProps {
@@ -39,6 +42,7 @@ const SHARED_DRIVE_FOLDER_URL =
   'https://drive.google.com/drive/folders/1hPDCoTd5K4163HsDW7_LtQXXB8VvBkv3';
 
 type OpenDocumentId =
+  | 'operations_manual'
   | 'geometry_creation'
   | 'book_pdf'
   | 'manifesto'
@@ -59,8 +63,24 @@ interface OpenLibraryDocumentItem {
 
 const OPEN_DOCUMENTS: OpenLibraryDocumentItem[] = [
   {
+    id: 'operations_manual',
+    indexLabel: '01 · NEW · Functional Operations & Step-by-Step How-To Manual',
+    title: 'Symphony Markets Academy: Functional Features & Step-by-Step How-To Manual',
+    subtitle:
+      'Complete 4-page hands-on manual covering the 6 standalone modules, Android Xaman camera QR wallet sync, RLUSD TrustLine, live Support/Resistance & Android ntfy push alerts, and 24/7 XRPL Limit Buy/Sell execution.',
+    formatMeta: '4-Page Printable Step-by-Step PDF · Works Offline & on Vercel',
+    filename: 'symphony-markets-functional-how-to-manual.pdf',
+    inlinePreviewSrc: '',
+    highlights: [
+      'Step-by-step Android Xaman wallet sync via Tablet Camera QR or public r... address (zero API keys, zero KYC) + one-time RLUSD TrustLine setup.',
+      'How to activate Tablet Live Chime Alerts and Free Android Phone Lock-Screen Push Notifications (ntfy) for Support & Resistance zones.',
+      'Exact 4-step process to place 24/7 XRPL Limit Buy & Limit Sell orders in Android Xaman DEX or Sologenic DEX and verify live orders on-chain.',
+      'Includes the 30-second Vercel / custom-domain Firebase Authorized Domains checklist for Admin Google Sign-In.',
+    ],
+  },
+  {
     id: 'geometry_creation',
-    indexLabel: '01 · Sacred Geometry & Market Structure',
+    indexLabel: '02 · Sacred Geometry & Market Structure',
     title: 'The Geometry of Creation & Commerce (144 / 233 & 3-Point Fibonacci Extensions)',
     subtitle:
       'Connects Fibonacci retracements and 3-point extensions (100%, 127.2%, 161.8%) with the 13-note musical octave and the 144 / 233 structural framework.',
@@ -76,7 +96,7 @@ const OPEN_DOCUMENTS: OpenLibraryDocumentItem[] = [
   },
   {
     id: 'book_pdf',
-    indexLabel: '02 · Complete Free Book (PDF & EPUB)',
+    indexLabel: '03 · Complete Free Book (PDF & EPUB)',
     title: 'Quantum Analemma A.I. Technology Cycle',
     subtitle:
       'Complete book edition by Spiritual Sciences Pneumatology Researcher William Hardrick, DQP-KS — open for all readers in PDF and EPUB.',
@@ -91,7 +111,7 @@ const OPEN_DOCUMENTS: OpenLibraryDocumentItem[] = [
   },
   {
     id: 'manifesto',
-    indexLabel: '03 · Beginner Protection Guide',
+    indexLabel: '04 · Beginner Protection Guide',
     title: 'The “No-Scam Zone” Manifesto & $5 Real-Wallet Starter Guide',
     subtitle:
       'Essential safety checklist before any student connects a self-custody wallet or tests a $5 Spot swap.',
@@ -106,7 +126,7 @@ const OPEN_DOCUMENTS: OpenLibraryDocumentItem[] = [
   },
   {
     id: 'certificate',
-    indexLabel: '04 · Ethical Classroom Covenant',
+    indexLabel: '05 · Ethical Classroom Covenant',
     title: 'Certificate of Commitment & No-Scam Zone Ethical Agreement',
     subtitle:
       '“If you’re looking for a scam, you won’t find one here.” — Our open non-custodial classroom pledge.',
@@ -121,7 +141,7 @@ const OPEN_DOCUMENTS: OpenLibraryDocumentItem[] = [
   },
   {
     id: 'companion',
-    indexLabel: '05 · 4-Pillar Study Companion',
+    indexLabel: '06 · 4-Pillar Study Companion',
     title: 'The Sovereign Mind & The Honest Market (Reader’s Companion)',
     subtitle:
       'Study guide uniting calm breathing (Pneuma), proportional risk geometry, and ethical AI guardrails.',
@@ -278,22 +298,57 @@ export const OpenMediaAndDocumentLibrary: React.FC<OpenMediaAndDocumentLibraryPr
   onJumpToBeginnerStart,
 }) => {
   const [libraryTab, setLibraryTab] = useState<'documents' | 'videos' | 'podcast'>('documents');
-  const [selectedDocId, setSelectedDocId] = useState<OpenDocumentId>('geometry_creation');
+  const [selectedDocId, setSelectedDocId] = useState<OpenDocumentId>('operations_manual');
   const [showInlineReader, setShowInlineReader] = useState<boolean>(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<string>('vid_organic_rhythm');
+  const [operationsManualBlobUrl, setOperationsManualBlobUrl] = useState<string>('');
+
+  // Generate client-side 4-page Functional Operations PDF URL so it previews & downloads cleanly everywhere (including Vercel)
+  useEffect(() => {
+    const blob = createFunctionalOperationsManualPdfBlob();
+    const url = URL.createObjectURL(blob);
+    setOperationsManualBlobUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, []);
 
   const activeDoc = OPEN_DOCUMENTS.find((d) => d.id === selectedDocId) ?? OPEN_DOCUMENTS[0];
+  const resolvedActivePreviewSrc =
+    activeDoc.id === 'operations_manual' ? operationsManualBlobUrl : activeDoc.inlinePreviewSrc;
+  const resolvedActiveDirectHref =
+    activeDoc.id === 'operations_manual' ? operationsManualBlobUrl : activeDoc.directHref;
   const resolvedOrientation = resolveOrientationMedia(orientationVideoUrl);
   const activeTrack =
     OPEN_VIDEO_TRACKS.find((t) => t.id === selectedVideoId) ?? OPEN_VIDEO_TRACKS[0];
 
   const handleDownloadDocument = async (
-    docKey: 'geometry_creation' | 'manifesto' | 'certificate' | 'companion' | 'book_pdf' | 'book_epub',
+    docKey:
+      | 'operations_manual'
+      | 'geometry_creation'
+      | 'manifesto'
+      | 'certificate'
+      | 'companion'
+      | 'book_pdf'
+      | 'book_epub',
     filename: string
   ) => {
     setDownloadingId(docKey);
     try {
+      if (docKey === 'operations_manual') {
+        const blob = createFunctionalOperationsManualPdfBlob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        return;
+      }
+
       if (docKey === 'geometry_creation') {
         const link = document.createElement('a');
         link.href = GEOMETRY_PDF_LOCAL_URL;
@@ -371,7 +426,7 @@ export const OpenMediaAndDocumentLibrary: React.FC<OpenMediaAndDocumentLibraryPr
               }`}
             >
               <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span>Open Document Library (5 PDFs + EPUB)</span>
+              <span>Open Document Library (6 PDFs + EPUB)</span>
             </button>
             <button
               type="button"
@@ -571,9 +626,9 @@ export const OpenMediaAndDocumentLibrary: React.FC<OpenMediaAndDocumentLibraryPr
                 {showInlineReader ? 'Hide Inline PDF Reader' : 'Read PDF Inline'}
               </button>
 
-              {activeDoc.directHref && (
+              {resolvedActiveDirectHref && (
                 <a
-                  href={activeDoc.directHref}
+                  href={resolvedActiveDirectHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-sky-600 dark:text-sky-400 hover:underline whitespace-nowrap shrink-0"
@@ -584,11 +639,11 @@ export const OpenMediaAndDocumentLibrary: React.FC<OpenMediaAndDocumentLibraryPr
               )}
             </div>
 
-            {showInlineReader && (
+            {showInlineReader && resolvedActivePreviewSrc && (
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-950">
                 <iframe
-                  key={activeDoc.inlinePreviewSrc}
-                  src={activeDoc.inlinePreviewSrc}
+                  key={resolvedActivePreviewSrc}
+                  src={resolvedActivePreviewSrc}
                   title={activeDoc.title}
                   className="w-full h-[520px] border-0"
                 />

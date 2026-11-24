@@ -23,7 +23,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '12mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -962,6 +962,126 @@ Write a crystal-clear, encouraging Masterclass Explanation with concise, well-ba
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Notification relay failed.';
       res.status(502).json({ error: msg });
+    }
+  });
+
+  // =========================================================================
+  // Server-Side Multimodal Chart Screenshot Analyzer (Option B — Crypto, Forex, Gold, Stocks)
+  // Uses @google/genai gemini-4-hydrogen with strict No-Scam Zone educational JSON schema
+  // =========================================================================
+  app.post('/api/analyze-chart-screenshot', async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        res.status(500).json({
+          error:
+            'GEMINI_API_KEY is not configured. Please check Settings > Secrets in AI Studio.',
+        });
+        return;
+      }
+
+      const rawBase64 = String(req.body?.imageBase64 ?? '').trim();
+      const mimeType = String(req.body?.mimeType ?? 'image/png').trim();
+      const budgetUsd = Math.max(5, Math.min(1_000_000, Number(req.body?.budgetUsd ?? 100) || 100));
+      const riskPct = Math.max(0.5, Math.min(5, Number(req.body?.riskPct ?? 2) || 2));
+
+      if (!rawBase64 || rawBase64.length < 100) {
+        res.status(400).json({ error: 'Please upload a clear chart screenshot image first.' });
+        return;
+      }
+
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType)) {
+        res.status(400).json({ error: 'Supported image formats are PNG, JPG/JPEG, and WEBP.' });
+        return;
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+
+      const promptText = [
+        'Analyze this financial candlestick/price chart screenshot strictly as an honest, beginner-friendly trading educator (No-Scam Zone — zero hype, zero guaranteed win rates).',
+        `The student has a practice budget of $${budgetUsd.toFixed(2)} and follows a strict ${riskPct}% maximum risk-per-trade rule.`,
+        'Instructions:',
+        '1. Read the visible price axis carefully to identify realistic numeric values for current/entry price, nearest structural support floor, nearest structural resistance ceiling, a disciplined stop-loss level just beyond invalidation, and a logical take-profit target (aiming for ~1:2 to 1:3 reward-to-risk when structure allows).',
+        '2. Identify the asset/pair label (e.g., "XRP / USDT", "EUR / USD", "BTC / USD", "XAU / USD", or "Uploaded Chart") and timeframe if visible (e.g., "1H", "4H", "1D", or "Chart View").',
+        '3. Choose direction: "BUY" for bullish pullback/support setup, "SELL" for clear resistance/bearish structure, or "WAIT" if price is overextended mid-range.',
+        '4. Keep plainSummary calm, clear, and under 2 short sentences. Provide exactly 3 concise keyObservations (support/resistance structure, candle behavior, and risk rule reminder) and 1 short cautionNote.',
+        '5. If numbers on the chart are blurry or missing, still provide your best faithful estimate from the visible axis and mention verifying exact broker/DEX numbers in cautionNote.',
+      ].join('\n');
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: rawBase64,
+              },
+            },
+            { text: promptText },
+          ],
+        },
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              assetLabel: { type: Type.STRING },
+              timeframeLabel: { type: Type.STRING },
+              marketBias: { type: Type.STRING },
+              direction: { type: Type.STRING },
+              entryPrice: { type: Type.NUMBER },
+              takeProfitPrice: { type: Type.NUMBER },
+              stopLossPrice: { type: Type.NUMBER },
+              supportLevel: { type: Type.NUMBER },
+              resistanceLevel: { type: Type.NUMBER },
+              riskRewardRatio: { type: Type.NUMBER },
+              plainSummary: { type: Type.STRING },
+              keyObservations: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+              cautionNote: { type: Type.STRING },
+            },
+            required: [
+              'assetLabel',
+              'timeframeLabel',
+              'marketBias',
+              'direction',
+              'entryPrice',
+              'takeProfitPrice',
+              'stopLossPrice',
+              'supportLevel',
+              'resistanceLevel',
+              'riskRewardRatio',
+              'plainSummary',
+              'keyObservations',
+              'cautionNote',
+            ],
+          },
+        },
+      });
+
+      const parsed = parseGeminiJson(response.text) as Record<string, unknown>;
+      res.json({ ok: true, analysis: parsed });
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Unable to analyze chart screenshot right now.';
+      const status =
+        msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')
+          ? 429
+          : msg.includes('403') || msg.includes('PERMISSION_DENIED')
+          ? 403
+          : 502;
+      res.status(status).json({ error: msg });
     }
   });
 

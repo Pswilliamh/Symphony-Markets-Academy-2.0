@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
+  ChevronDown,
+  ChevronUp,
+  Layers,
+} from 'lucide-react';
+import {
   AssetSymbol,
   Candle,
   FibonacciLevel,
@@ -25,6 +30,14 @@ interface CandlestickChartProps {
   onToggleTrendBands: () => void;
   showRiskOverlay: boolean;
   onToggleRiskOverlay: () => void;
+  // Option A — Floating 3-Line Dollar Setup Card + Quick Nudge Controls
+  accountBalance?: number;
+  riskPercent?: number;
+  rrRatio?: number;
+  stopDistancePct?: number;
+  onEntryPriceChange?: (val: number) => void;
+  onStopDistancePctChange?: (val: number) => void;
+  onRrRatioChange?: (val: number) => void;
 }
 
 export const CandlestickChart: React.FC<CandlestickChartProps> = ({
@@ -45,8 +58,16 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
   onToggleTrendBands,
   showRiskOverlay,
   onToggleRiskOverlay,
+  accountBalance = 100,
+  riskPercent = 2,
+  rrRatio = 2,
+  stopDistancePct = 2,
+  onEntryPriceChange,
+  onStopDistancePctChange,
+  onRrRatioChange,
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
 
   const visibleCandles = useMemo(() => candles.slice(-56), [candles]);
   const indexOffset = Math.max(0, candles.length - visibleCandles.length);
@@ -63,7 +84,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
     }
     const rawMin = Math.min(...lows);
     const rawMax = Math.max(...highs);
-    const pad = (rawMax - rawMin) * 0.08 || 0.01;
+    const pad = (rawMax - rawMin) * 0.1 || 0.01;
     return {
       minPrice: rawMin - pad,
       maxPrice: rawMax + pad,
@@ -74,7 +95,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const width = 920;
   const height = 420;
   const padLeft = 14;
-  const padRight = 76;
+  const padRight = 84;
   const padTop = 20;
   const padBottom = 34;
   const plotWidth = width - padLeft - padRight;
@@ -93,19 +114,20 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
       : candles.length - 1;
   const inspectedCandle = candles[activeIdx] || candles[candles.length - 1];
 
-  const activeFibZone = useMemo(() => {
-    if (!inspectedCandle || fibLevels.length < 2) return null;
-    for (let i = 0; i < fibLevels.length - 1; i++) {
-      const upper = fibLevels[i];
-      const lower = fibLevels[i + 1];
-      if (inspectedCandle.close <= upper.price && inspectedCandle.close >= lower.price) {
-        return lower;
-      }
-    }
-    return fibLevels[Math.floor(fibLevels.length / 2)];
-  }, [inspectedCandle, fibLevels]);
-
   const decimals = symbol === 'BTCUSDT' ? 2 : 4;
+  const safeBudget = Math.max(1, accountBalance || 5);
+  const safeRiskPct = Math.max(0.5, riskPercent || 2);
+  const safeRr = Math.max(1, rrRatio || 2);
+  const maxRiskUsd = safeBudget * (safeRiskPct / 100);
+  const potentialRewardUsd = maxRiskUsd * safeRr;
+
+  // Nudge step = 0.25% of current entry price
+  const handleNudgeEntry = (dir: 1 | -1) => {
+    if (!onEntryPriceChange || entryPrice <= 0) return;
+    const step = Math.max(symbol === 'BTCUSDT' ? 25 : 0.0025, entryPrice * 0.0025);
+    const next = Number(Math.max(0.0001, entryPrice + dir * step).toFixed(decimals));
+    onEntryPriceChange(next);
+  };
 
   const emaPoints = useMemo(() => {
     return visibleCandles
@@ -147,18 +169,29 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
       .join(' ');
   }, [visibleCandles, minPrice, maxPrice]);
 
+  // Visual Risk/Reward Box geometry (starts cleanly at ~35% across chart so price history stays crisp on the left)
+  const zoneStartX = padLeft + plotWidth * 0.34;
+  const zoneWidth = plotWidth * 0.66;
+  const yEntry = priceToY(entryPrice);
+  const yStop = priceToY(stopLoss);
+  const yTarget = priceToY(takeProfit);
+  const rewardTop = Math.min(yEntry, yTarget);
+  const rewardHeight = Math.max(4, Math.abs(yTarget - yEntry));
+  const riskTop = Math.min(yEntry, yStop);
+  const riskHeight = Math.max(4, Math.abs(yStop - yEntry));
+
   return (
-    <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-4 sm:p-5">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-3">
+    <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-4 sm:p-5 space-y-4">
+      {/* Clean Minimal Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800">
             {(['15m', '1h', '4h', '1d'] as Timeframe[]).map((tf) => (
               <button
                 key={tf}
                 type="button"
                 onClick={() => onTimeframeChange(tf)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   timeframe === tf
                     ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -169,113 +202,133 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
             ))}
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>Click any candle to inspect pattern & sentiment</span>
-          </div>
+          {inspectedCandle && (
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
+              <span>
+                Close:{' '}
+                <strong
+                  className={
+                    inspectedCandle.close >= inspectedCandle.open
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }
+                >
+                  ${inspectedCandle.close.toFixed(decimals)}
+                </strong>
+              </span>
+              {inspectedCandle.detectedPattern && (
+                <>
+                  <span>·</span>
+                  <span className="font-sans font-medium text-amber-600 dark:text-amber-400">
+                    {inspectedCandle.detectedPattern.name}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Layer Toggles */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        {/* Clean Single "Chart Layers" Toggle Button */}
+        <div className="relative">
           <button
             type="button"
-            onClick={onToggleRiskOverlay}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
-              showRiskOverlay
-                ? 'bg-sky-500/10 border-sky-500/40 text-sky-600 dark:text-sky-400'
-                : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            onClick={() => setShowLayerMenu((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors whitespace-nowrap cursor-pointer"
           >
-            1:2 Risk Target Lines
+            <Layers className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+            <span>Chart Layers</span>
           </button>
-          <button
-            type="button"
-            onClick={onToggleFibOverlay}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
-              showFibOverlay
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
-                : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Fibonacci Retracement Bands
-          </button>
-          <button
-            type="button"
-            onClick={onToggleTrendBands}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
-              showTrendBands
-                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
-                : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            EMA 20 / SMA 50 / Bollinger
-          </button>
+
+          {showLayerMenu && (
+            <div className="absolute right-0 mt-1.5 z-20 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-2 space-y-1 text-xs">
+              <button
+                type="button"
+                onClick={onToggleRiskOverlay}
+                className={`w-full text-left px-2.5 py-1.5 rounded-md font-medium flex items-center justify-between cursor-pointer ${
+                  showRiskOverlay
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span>Green / Red Risk Box</span>
+                <span>{showRiskOverlay ? 'ON' : 'OFF'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onToggleFibOverlay}
+                className={`w-full text-left px-2.5 py-1.5 rounded-md font-medium flex items-center justify-between cursor-pointer ${
+                  showFibOverlay
+                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span>Fibonacci Bands</span>
+                <span>{showFibOverlay ? 'ON' : 'OFF'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onToggleTrendBands}
+                className={`w-full text-left px-2.5 py-1.5 rounded-md font-medium flex items-center justify-between cursor-pointer ${
+                  showTrendBands
+                    ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span>EMA 20 / SMA 50</span>
+                <span>{showTrendBands ? 'ON' : 'OFF'}</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Inspected Candle Telemetry Bar */}
-      {inspectedCandle && (
-        <div className="py-3 flex flex-wrap items-center justify-between gap-4 text-xs border-b border-slate-100 dark:border-slate-800/70">
-          <div className="flex flex-wrap items-center gap-3 font-mono tabular-nums">
-            <span className="text-slate-500 dark:text-slate-400">
-              {new Date(inspectedCandle.time).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-            <span className="text-slate-700 dark:text-slate-300">
-              O: <strong>${inspectedCandle.open.toFixed(decimals)}</strong>
-            </span>
-            <span className="text-slate-700 dark:text-slate-300">
-              H: <strong>${inspectedCandle.high.toFixed(decimals)}</strong>
-            </span>
-            <span className="text-slate-700 dark:text-slate-300">
-              L: <strong>${inspectedCandle.low.toFixed(decimals)}</strong>
-            </span>
-            <span
-              className={
-                inspectedCandle.close >= inspectedCandle.open
-                  ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                  : 'text-rose-600 dark:text-rose-400 font-semibold'
-              }
-            >
-              C: ${inspectedCandle.close.toFixed(decimals)}
-            </span>
-            <span className="text-slate-500 dark:text-slate-400">
-              Vol: {(inspectedCandle.volume / 1_000_000).toFixed(2)}M
-            </span>
+      {/* ====================================================================
+       * OPTION A: ULTRA-SIMPLE 3-LINE "AT-A-GLANCE" TRADE SETUP CARD
+       * Visible cleanly right above candles on mobile & neatly integrated on desktop
+       * ==================================================================== */}
+      {showRiskOverlay && entryPrice > 0 && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-950/80 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white font-mono tabular-nums">
+              {tradeSide === 'long' ? 'Buy around' : 'Short around'} ${entryPrice.toFixed(decimals)}
+            </div>
+            <div className="text-xs font-mono tabular-nums text-slate-600 dark:text-slate-300">
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                Target: ${takeProfit.toFixed(decimals)}
+              </span>
+              <span className="mx-1.5 text-slate-400">·</span>
+              <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                Stop Loss: ${stopLoss.toFixed(decimals)}
+              </span>
+              <span className="mx-1.5 text-slate-400">·</span>
+              <span className="text-slate-500 dark:text-slate-400">1:{safeRr} R:R</span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {inspectedCandle.detectedPattern ? (
-              <span className="font-medium text-amber-600 dark:text-amber-400">
-                Pattern: {inspectedCandle.detectedPattern.name} ({inspectedCandle.detectedPattern.bias})
-              </span>
-            ) : (
-              <span className="text-slate-500 dark:text-slate-400">
-                Standard Continuation Bar
-              </span>
-            )}
-            {activeFibZone && (
-              <>
-                <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">
-                  ·
-                </span>
-                <span className="text-slate-600 dark:text-slate-300">
-                  Fib Zone: <strong style={{ color: activeFibZone.colorHex }}>{activeFibZone.label}</strong>
-                </span>
-              </>
-            )}
+          <div className="sm:text-right font-mono tabular-nums text-xs space-y-0.5 shrink-0">
+            <div className="text-slate-700 dark:text-slate-300">
+              Potential:{' '}
+              <strong className="text-emerald-600 dark:text-emerald-400">
+                +${potentialRewardUsd.toFixed(2)}
+              </strong>{' '}
+              on ${safeBudget.toFixed(0)}
+            </div>
+            <div className="text-slate-600 dark:text-slate-400">
+              Max Risk:{' '}
+              <strong className="text-rose-600 dark:text-rose-400">
+                -${maxRiskUsd.toFixed(2)}
+              </strong>{' '}
+              ({safeRiskPct}%)
+            </div>
           </div>
         </div>
       )}
 
-      {/* SVG Interactive Chart */}
-      <div className="relative mt-2 w-full overflow-x-auto">
+      {/* SVG Interactive Chart with Prominent Green Profit Box & Red Risk Box */}
+      <div className="relative w-full overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-[380px] sm:h-[420px] select-none"
+          className="w-full h-[340px] sm:h-[400px] select-none"
           role="img"
           aria-label={`Interactive candlestick chart for ${symbol}`}
         >
@@ -295,7 +348,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                   strokeDasharray="3 3"
                 />
                 <text
-                  x={width - padRight + 6}
+                  x={width - padRight + 8}
                   y={y + 4}
                   className="fill-slate-400 dark:fill-slate-500 font-mono text-[10px]"
                 >
@@ -305,7 +358,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
             );
           })}
 
-          {/* Fibonacci Retracement Color-Coded Visual Spectrum Zones */}
+          {/* Optional Fibonacci Retracement Bands (Off by default for visual simplicity) */}
           {showFibOverlay &&
             fibLevels.map((lvl, idx) => {
               const y = priceToY(lvl.price);
@@ -320,7 +373,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                       width={plotWidth}
                       height={Math.abs(nextY - y)}
                       fill={lvl.colorHex}
-                      fillOpacity={0.055}
+                      fillOpacity={0.045}
                     />
                   )}
                   <line
@@ -331,7 +384,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                     stroke={lvl.colorHex}
                     strokeWidth={1}
                     strokeDasharray="4 4"
-                    strokeOpacity={0.75}
+                    strokeOpacity={0.65}
                   />
                   <text
                     x={padLeft + 6}
@@ -345,86 +398,156 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
               );
             })}
 
-          {/* Risk Manager Visual Zones (Entry, 2% Stop-Loss, 1:2 Take-Profit) */}
+          {/* OPTION A: Crisp Scantrader-Style Green Profit Zone & Red Stop-Loss Zone */}
           {showRiskOverlay && entryPrice > 0 && (
             <g>
-              {/* Stop Loss Shaded Area */}
-              <rect
-                x={padLeft}
-                y={Math.min(priceToY(entryPrice), priceToY(stopLoss))}
-                width={plotWidth}
-                height={Math.abs(priceToY(stopLoss) - priceToY(entryPrice))}
-                fill="#F43F5E"
-                fillOpacity={0.08}
+              {/* Vertical Setup Anchor Divider */}
+              <line
+                x1={zoneStartX}
+                y1={padTop}
+                x2={zoneStartX}
+                y2={height - padBottom}
+                stroke="#94A3B8"
+                strokeWidth={1}
+                strokeDasharray="4 4"
+                strokeOpacity={0.6}
               />
-              {/* Take Profit 1:2 Shaded Area */}
+
+              {/* Green Reward Zone Box */}
               <rect
-                x={padLeft}
-                y={Math.min(priceToY(entryPrice), priceToY(takeProfit))}
-                width={plotWidth}
-                height={Math.abs(priceToY(takeProfit) - priceToY(entryPrice))}
+                x={zoneStartX}
+                y={rewardTop}
+                width={zoneWidth}
+                height={rewardHeight}
                 fill="#10B981"
-                fillOpacity={0.08}
+                fillOpacity={0.14}
               />
-              {/* Entry Line */}
-              <line
-                x1={padLeft}
-                y1={priceToY(entryPrice)}
-                x2={width - padRight}
-                y2={priceToY(entryPrice)}
-                stroke="#0EA5E9"
-                strokeWidth={1.5}
-              />
-              <text
-                x={width - padRight - 145}
-                y={priceToY(entryPrice) - 5}
-                fill="#0EA5E9"
-                className="font-mono text-[10px] font-semibold"
-              >
-                {tradeSide.toUpperCase()} ENTRY ${entryPrice.toFixed(decimals)}
-              </text>
-
-              {/* Stop Loss Line */}
-              <line
-                x1={padLeft}
-                y1={priceToY(stopLoss)}
-                x2={width - padRight}
-                y2={priceToY(stopLoss)}
-                stroke="#F43F5E"
-                strokeWidth={1.5}
-                strokeDasharray="5 3"
-              />
-              <text
-                x={width - padRight - 155}
-                y={priceToY(stopLoss) - 5}
+              {/* Red Risk Zone Box */}
+              <rect
+                x={zoneStartX}
+                y={riskTop}
+                width={zoneWidth}
+                height={riskHeight}
                 fill="#F43F5E"
-                className="font-mono text-[10px] font-semibold"
-              >
-                2% STOP LOSS ${stopLoss.toFixed(decimals)}
-              </text>
+                fillOpacity={0.14}
+              />
 
-              {/* Take Profit Line */}
+              {/* Take Profit Line + Right-Axis Solid Price Tag + Inline Dollar Label */}
               <line
-                x1={padLeft}
-                y1={priceToY(takeProfit)}
+                x1={zoneStartX}
+                y1={yTarget}
                 x2={width - padRight}
-                y2={priceToY(takeProfit)}
+                y2={yTarget}
                 stroke="#10B981"
-                strokeWidth={1.5}
-                strokeDasharray="5 3"
+                strokeWidth={1.75}
+              />
+              <rect
+                x={zoneStartX + 10}
+                y={Math.max(padTop + 4, yTarget - 11)}
+                width={158}
+                height={20}
+                rx={4}
+                fill="#059669"
+                fillOpacity={0.92}
               />
               <text
-                x={width - padRight - 165}
-                y={priceToY(takeProfit) - 5}
-                fill="#10B981"
-                className="font-mono text-[10px] font-semibold"
+                x={zoneStartX + 18}
+                y={Math.max(padTop + 17, yTarget + 2)}
+                fill="#FFFFFF"
+                className="font-mono text-[10px] font-bold"
               >
-                1:2 TARGET ${takeProfit.toFixed(decimals)}
+                TP · +${potentialRewardUsd.toFixed(2)} (1:{safeRr})
+              </text>
+              <rect
+                x={width - padRight + 4}
+                y={yTarget - 10}
+                width={74}
+                height={20}
+                rx={4}
+                fill="#10B981"
+              />
+              <text
+                x={width - padRight + 10}
+                y={yTarget + 4}
+                fill="#FFFFFF"
+                className="font-mono text-[10px] font-bold"
+              >
+                ${takeProfit.toFixed(decimals)}
+              </text>
+
+              {/* Entry Line + Right-Axis Price Tag */}
+              <line
+                x1={zoneStartX}
+                y1={yEntry}
+                x2={width - padRight}
+                y2={yEntry}
+                stroke="#0284C7"
+                strokeWidth={1.75}
+              />
+              <circle cx={zoneStartX} cy={yEntry} r={4} fill="#0284C7" stroke="#FFFFFF" strokeWidth={1.5} />
+              <rect
+                x={width - padRight + 4}
+                y={yEntry - 10}
+                width={74}
+                height={20}
+                rx={4}
+                fill="#0284C7"
+              />
+              <text
+                x={width - padRight + 10}
+                y={yEntry + 4}
+                fill="#FFFFFF"
+                className="font-mono text-[10px] font-bold"
+              >
+                ${entryPrice.toFixed(decimals)}
+              </text>
+
+              {/* Stop Loss Line + Right-Axis Solid Price Tag + Inline Dollar Label */}
+              <line
+                x1={zoneStartX}
+                y1={yStop}
+                x2={width - padRight}
+                y2={yStop}
+                stroke="#E11D48"
+                strokeWidth={1.75}
+              />
+              <rect
+                x={zoneStartX + 10}
+                y={Math.min(height - padBottom - 22, yStop - 9)}
+                width={142}
+                height={20}
+                rx={4}
+                fill="#E11D48"
+                fillOpacity={0.92}
+              />
+              <text
+                x={zoneStartX + 18}
+                y={Math.min(height - padBottom - 9, yStop + 4)}
+                fill="#FFFFFF"
+                className="font-mono text-[10px] font-bold"
+              >
+                SL · -${maxRiskUsd.toFixed(2)} ({safeRiskPct}%)
+              </text>
+              <rect
+                x={width - padRight + 4}
+                y={yStop - 10}
+                width={74}
+                height={20}
+                rx={4}
+                fill="#E11D48"
+              />
+              <text
+                x={width - padRight + 10}
+                y={yStop + 4}
+                fill="#FFFFFF"
+                className="font-mono text-[10px] font-bold"
+              >
+                ${stopLoss.toFixed(decimals)}
               </text>
             </g>
           )}
 
-          {/* Trend & Volatility Polylines */}
+          {/* Optional Trend Lines (Off by default so chart stays ultra-clean) */}
           {showTrendBands && (
             <g>
               <polyline
@@ -447,7 +570,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                 strokeWidth={1}
                 strokeDasharray="2 2"
                 points={bbUpperPoints}
-                opacity={0.55}
+                opacity={0.45}
               />
               <polyline
                 fill="none"
@@ -455,12 +578,12 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                 strokeWidth={1}
                 strokeDasharray="2 2"
                 points={bbLowerPoints}
-                opacity={0.55}
+                opacity={0.45}
               />
             </g>
           )}
 
-          {/* Candlesticks & Volume Bars */}
+          {/* Candlesticks & Subtle Volume */}
           {visibleCandles.map((candle, idx) => {
             const globalIdx = indexOffset + idx;
             const slotWidth = plotWidth / visibleCandles.length;
@@ -477,7 +600,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
             const bodyTop = Math.min(yOpen, yClose);
             const bodyHeight = Math.max(2, Math.abs(yClose - yOpen));
 
-            const volHeight = (candle.volume / maxVolume) * 48;
+            const volHeight = (candle.volume / maxVolume) * 36;
             const isSelected = activeIdx === globalIdx;
 
             return (
@@ -488,7 +611,6 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                 onMouseLeave={() => setHoveredIndex(null)}
                 onClick={() => onSelectCandle(globalIdx)}
               >
-                {/* Selection Vertical Guide */}
                 {isSelected && (
                   <line
                     x1={xCenter}
@@ -498,21 +620,19 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                     stroke="#38BDF8"
                     strokeWidth={1}
                     strokeDasharray="2 2"
-                    strokeOpacity={0.65}
+                    strokeOpacity={0.55}
                   />
                 )}
 
-                {/* Volume Subplot Bar */}
                 <rect
                   x={xCenter - candleWidth / 2}
                   y={height - padBottom - volHeight}
                   width={candleWidth}
                   height={volHeight}
                   fill={color}
-                  fillOpacity={0.18}
+                  fillOpacity={0.12}
                 />
 
-                {/* High-Low Wick */}
                 <line
                   x1={xCenter}
                   y1={yHigh}
@@ -522,7 +642,6 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                   strokeWidth={1.35}
                 />
 
-                {/* Open-Close Real Body */}
                 <rect
                   x={xCenter - candleWidth / 2}
                   y={bodyTop}
@@ -533,49 +652,90 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
                   stroke={isSelected ? '#FACC15' : 'none'}
                   strokeWidth={isSelected ? 1.5 : 0}
                 />
-
-                {/* Pattern Marker Triangle */}
-                {candle.detectedPattern && (
-                  <circle
-                    cx={xCenter}
-                    cy={isBull ? yLow + 9 : yHigh - 9}
-                    r={3.2}
-                    fill={
-                      candle.detectedPattern.bias === 'Bullish'
-                        ? '#10B981'
-                        : candle.detectedPattern.bias === 'Bearish'
-                        ? '#F43F5E'
-                        : '#F59E0B'
-                    }
-                    stroke="#0F172A"
-                    strokeWidth={1}
-                  />
-                )}
               </g>
             );
           })}
         </svg>
       </div>
 
-      {/* Legend & Quick Educational Strip */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-        <div className="flex flex-wrap items-center gap-4">
-          <span>
-            <strong className="text-sky-500">EMA 20</strong> Short-Term Momentum
-          </span>
-          <span>·</span>
-          <span>
-            <strong className="text-purple-400">SMA 50</strong> Structural Trend Baseline
-          </span>
-          <span>·</span>
-          <span>
-            <strong className="text-amber-500">● Markers</strong> Detected Candlestick Formation (Click to inspect)
+      {/* Simple Visual Nudge Controls (Adjust Entry, Stop Width, or Reward Ratio in 1 Tap) */}
+      {(onEntryPriceChange || onStopDistancePctChange || onRrRatioChange) && (
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            {onEntryPriceChange && (
+              <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-1">
+                <span className="px-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  Move Entry
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleNudgeEntry(-1)}
+                  aria-label="Nudge entry price lower"
+                  className="p-1 rounded bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNudgeEntry(1)}
+                  aria-label="Nudge entry price higher"
+                  className="p-1 rounded bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {onStopDistancePctChange && (
+              <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-1">
+                <span className="px-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  Stop
+                </span>
+                {[1.5, 2, 3].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => onStopDistancePctChange(pct)}
+                    className={`px-2 py-1 rounded text-[11px] font-mono font-semibold cursor-pointer ${
+                      Math.abs(stopDistancePct - pct) < 0.2
+                        ? 'bg-rose-600 text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {onRrRatioChange && (
+              <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-1">
+                <span className="px-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  Target
+                </span>
+                {[2, 3].map((ratio) => (
+                  <button
+                    key={ratio}
+                    type="button"
+                    onClick={() => onRrRatioChange(ratio)}
+                    className={`px-2 py-1 rounded text-[11px] font-mono font-semibold cursor-pointer ${
+                      rrRatio === ratio
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    1:{ratio}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            Green = Reward · Red = Max Risk
           </span>
         </div>
-        <span className="font-mono tabular-nums">
-          Showing {visibleCandles.length} periods · Educational Paper Mode
-        </span>
-      </div>
+      )}
     </div>
   );
 };

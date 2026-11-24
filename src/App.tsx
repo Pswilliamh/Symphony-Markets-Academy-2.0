@@ -7,14 +7,17 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  BellRing,
   Camera,
   Check,
   CheckCircle2,
   Copy,
   ExternalLink,
+  Image as ImageIcon,
   KeyRound,
   Layers,
   Lock,
+  TrendingUp,
   Wallet,
   X,
 } from 'lucide-react';
@@ -27,6 +30,7 @@ import {
 import { CandleEducationDeck } from './components/CandleEducationDeck';
 import { CandlestickChart } from './components/CandlestickChart';
 import { CandlestickSymphonyComposer } from './components/CandlestickSymphonyComposer';
+import { ChartScreenshotScanner } from './components/ChartScreenshotScanner';
 import { CoinHistoryAndFoundersModule } from './components/CoinHistoryAndFoundersModule';
 import { DayTraderSkillSuite } from './components/DayTraderSkillSuite';
 import { DecentralizedAiDexDesk } from './components/DecentralizedAiDexDesk';
@@ -167,11 +171,14 @@ export default function App() {
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Chart Overlay Toggles & Candle Selection
+  // Chart Overlay Toggles & Candle Selection (Clean simple view by default: Candles + Green/Red Risk Box)
   const [selectedCandleIndex, setSelectedCandleIndex] = useState<number | null>(null);
-  const [showFibOverlay, setShowFibOverlay] = useState<boolean>(true);
-  const [showTrendBands, setShowTrendBands] = useState<boolean>(true);
+  const [showFibOverlay, setShowFibOverlay] = useState<boolean>(false);
+  const [showTrendBands, setShowTrendBands] = useState<boolean>(false);
   const [showRiskOverlay, setShowRiskOverlay] = useState<boolean>(true);
+  const [tradeDeskSubView, setTradeDeskSubView] = useState<
+    'simple_desk' | 'chart_scanner' | 'alerts_checklist'
+  >('simple_desk');
 
   // Risk Manager Simulator Parameters ($5 1x Spot Wallet default for guided learning)
   const [accountBalance, setAccountBalance] = useState<number>(5);
@@ -1724,49 +1731,117 @@ export default function App() {
               )}
 
               {activeLesson.id === 'risk-chart' && (
-                <div id="risk-chart" className="space-y-6">
-                  {/* Top-of-Screen Sync Your Xaman Wallet Bar (Always Visible & Instant Sync) */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <div className="flex items-start sm:items-center gap-3 min-w-0">
-                        <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                            embeddedXrplAddress
-                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
-                              : 'bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-400 border border-sky-500/30'
-                          }`}
-                        >
-                          <Wallet className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                              {embeddedXrplAddress
-                                ? 'Your Synced Xaman Wallet (Read-Only Live Watch)'
-                                : 'Sync Your Own Xaman Wallet Address'}
-                            </h2>
-                            {embeddedXrplAddress && (
-                              <span className="font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                                {embeddedXrplAddress.slice(0, 10)}...{embeddedXrplAddress.slice(-6)}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {embeddedXrplAddress
-                              ? 'Synced across the checklist, radar, and XRPL DEX below. Only your public r... address is stored — your signing keys stay 100% inside Android Xaman.'
-                              : 'Scan your Android Xaman Receive QR with this tablet camera, or paste your own public r... address below (never shares your secret keys).'}
-                          </p>
-                        </div>
-                      </div>
+                <div id="risk-chart" className="space-y-5">
+                  {/* ==========================================================
+                   * CALM, CLUTTER-FREE 3-VIEW WORKSPACE BAR FOR MODULE 3
+                   * ========================================================== */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setTradeDeskSubView('simple_desk')}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                          tradeDeskSubView === 'simple_desk'
+                            ? 'bg-slate-900 dark:bg-sky-600 text-white'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                        <span>1. Simple Trade Desk</span>
+                      </button>
 
-                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setTradeDeskSubView('chart_scanner')}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                          tradeDeskSubView === 'chart_scanner'
+                            ? 'bg-emerald-600 text-white'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>2. Scan Chart Screenshot (AI)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTradeDeskSubView('alerts_checklist')}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                          tradeDeskSubView === 'alerts_checklist'
+                            ? 'bg-sky-600 text-white'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <BellRing className="w-3.5 h-3.5 shrink-0" />
+                        <span>3. Alerts &amp; 1-by-1 Checklist</span>
+                      </button>
+                    </div>
+
+                    {/* Compact Wallet Status Button (Opens Sync Drawer Only When Clicked) */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowTopWalletSyncDrawer((v) => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                          embeddedXrplAddress
+                            ? 'border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
+                            : 'border-sky-500/50 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50'
+                        }`}
+                      >
+                        <Wallet className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-mono">
+                          {embeddedXrplAddress
+                            ? `Xaman: ${embeddedXrplAddress.slice(0, 6)}...${embeddedXrplAddress.slice(-4)}`
+                            : 'Sync Xaman Wallet'}
+                        </span>
+                      </button>
+                      {embeddedXrplAddress && (
                         <button
                           type="button"
                           onClick={() => {
-                            setShowTopWalletSyncDrawer(true);
-                            setShowTopWalletCameraScanner((v) => !v);
+                            handleSaveUserXrplAddress('');
+                            setAlertBanner('Cleared saved Xaman wallet address.');
                           }}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                          aria-label="Clear saved Xaman wallet address"
+                          className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* On-Demand Xaman Wallet Sync Drawer (Hidden by default to keep screen calm) */}
+                  {showTopWalletSyncDrawer && (
+                    <div className="rounded-xl border border-sky-400/50 bg-white dark:bg-slate-900 p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                            Connect Your Own Android Xaman Wallet (Read-Only Watch)
+                          </h2>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Scan your Android Xaman Receive QR with this camera or paste your public{' '}
+                            <span className="font-mono">r...</span> address. Your secret keys stay
+                            100% inside Android Xaman.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowTopWalletSyncDrawer(false);
+                            setShowTopWalletCameraScanner(false);
+                          }}
+                          className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                        >
+                          Close ✕
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowTopWalletCameraScanner((v) => !v)}
+                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           <Camera className="w-3.5 h-3.5 shrink-0" />
                           <span>
@@ -1775,322 +1850,298 @@ export default function App() {
                               : 'Scan Android Receive QR'}
                           </span>
                         </button>
+                        <input
+                          type="text"
+                          value={topWalletDraft}
+                          onChange={(e) => setTopWalletDraft(e.target.value)}
+                          placeholder="Or paste your public r... address"
+                          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono text-xs text-slate-900 dark:text-white"
+                        />
                         <button
                           type="button"
-                          onClick={() => setShowTopWalletSyncDrawer((v) => !v)}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                        >
-                          <span>
-                            {showTopWalletSyncDrawer
-                              ? 'Hide Wallet Box'
-                              : embeddedXrplAddress
-                              ? 'Change Address'
-                              : 'Paste r... Address'}
-                          </span>
-                        </button>
-                        {embeddedXrplAddress && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleSaveUserXrplAddress('');
-                              setAlertBanner('Cleared saved Xaman wallet address. You can sync your own r... address anytime.');
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-rose-500/40 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5 shrink-0" />
-                            <span>Clear</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {(showTopWalletSyncDrawer || !embeddedXrplAddress) && (
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                          <input
-                            type="text"
-                            value={topWalletDraft}
-                            onChange={(e) => setTopWalletDraft(e.target.value)}
-                            placeholder="Paste your own public Xaman XRPL address starting with r..."
-                            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 font-mono text-xs text-slate-900 dark:text-white"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const trimmed = topWalletDraft.trim();
-                              if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(trimmed)) {
-                                setAlertBanner(
-                                  'Please enter a valid public XRPL address starting with "r" (25–35 characters), or tap Scan Android Receive QR.'
-                                );
-                                return;
-                              }
-                              handleSaveUserXrplAddress(trimmed);
-                              setShowTopWalletSyncDrawer(false);
-                              setShowTopWalletCameraScanner(false);
+                          onClick={() => {
+                            const trimmed = topWalletDraft.trim();
+                            if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(trimmed)) {
                               setAlertBanner(
-                                `Synced your Xaman wallet (${trimmed.slice(0, 8)}...${trimmed.slice(-5)}) across the Trade Desk!`
+                                'Please enter a valid public XRPL address starting with "r", or use Scan Android Receive QR.'
                               );
-                            }}
-                            className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
-                          >
-                            Sync My Xaman Wallet
-                          </button>
-                        </div>
-
-                        {showTopWalletCameraScanner && (
-                          <XrplCameraQrScanner
-                            onClose={() => setShowTopWalletCameraScanner(false)}
-                            onAddressScanned={(scannedAddr) => {
-                              setShowTopWalletCameraScanner(false);
-                              setShowTopWalletSyncDrawer(false);
-                              handleSaveUserXrplAddress(scannedAddr);
-                              setAlertBanner(
-                                `Scanned your Android Xaman Receive QR (${scannedAddr.slice(0, 8)}...${scannedAddr.slice(-5)}) — Synced across Trade Desk!`
-                              );
-                            }}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <OneByOneTradeChecklist
-                    contextStep="step14"
-                    xrpLivePrice={xrpLive}
-                    connectedXrplAddress={embeddedXrplAddress}
-                    checklistState={oneByOneChecklist}
-                    onChangeChecklistState={setOneByOneChecklist}
-                    onLoadSetIntoDex={(payload) => {
-                      handleSelectSymbol('XRPUSDT');
-                      setInstrument('spot');
-                      setLeverage(1);
-                      setTradeSide('long');
-                      setShowRiskOverlay(true);
-                      if (payload.walletAddress) {
-                        handleSaveUserXrplAddress(payload.walletAddress);
-                      }
-                      setImportedXrplDexSet({
-                        ...payload,
-                        nonce: Date.now(),
-                      });
-                      const numStr =
-                        payload.setNumber < 10
-                          ? `0${payload.setNumber}`
-                          : String(payload.setNumber);
-                      setAlertBanner(
-                        `Loaded Set #${numStr} (${payload.setupName}) into Embedded XRPL DEX — ${payload.quantityXrp} XRP Ready!`
-                      );
-                    }}
-                  />
-
-                  <SupportResistanceRadarCard
-                    symbol={symbol}
-                    livePrice={livePrice}
-                    candles={activeCandles}
-                    fibLevels={fibLevels}
-                    connectedXrplAddress={embeddedXrplAddress}
-                    onLoadSetIntoDex={(payload) => {
-                      handleSelectSymbol('XRPUSDT');
-                      setInstrument('spot');
-                      setLeverage(1);
-                      setTradeSide('long');
-                      setShowRiskOverlay(true);
-                      if (payload.walletAddress) {
-                        handleSaveUserXrplAddress(payload.walletAddress);
-                      }
-                      setImportedXrplDexSet({
-                        ...payload,
-                        nonce: Date.now(),
-                      });
-                      setAlertBanner(
-                        `Staged ${payload.setupName} into Embedded XRPL DEX — Buy $${payload.buyPrice.toFixed(
-                          4
-                        )} · Sell $${payload.sellPrice.toFixed(4)} (${payload.quantityXrp} XRP)!`
-                      );
-                    }}
-                    onAddPriceAlert={(newAl) =>
-                      setAlerts((prev) => [
-                        { ...newAl, id: `al_${Date.now()}`, triggered: false },
-                        ...prev,
-                      ])
-                    }
-                    onNotifyBanner={(msg) => setAlertBanner(msg)}
-                  />
-
-                  <section className="flex flex-wrap items-center justify-between gap-4 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSymbol('BTCUSDT')}
-                          className={`px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                            symbol === 'BTCUSDT'
-                              ? 'bg-amber-600 text-white'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
+                              return;
+                            }
+                            handleSaveUserXrplAddress(trimmed);
+                            setShowTopWalletSyncDrawer(false);
+                            setShowTopWalletCameraScanner(false);
+                            setAlertBanner(
+                              `Synced your Xaman wallet (${trimmed.slice(0, 8)}...${trimmed.slice(-5)})!`
+                            );
+                          }}
+                          className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-500 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
                         >
-                          BTC / USDT ($
-                          {btcLive.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                          )
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSymbol('XRPUSDT')}
-                          className={`px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                            symbol === 'XRPUSDT'
-                              ? 'bg-sky-600 text-white'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          XRP / USDT (${xrpLive.toFixed(4)})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSymbol('XLMUSDT')}
-                          className={`px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                            symbol === 'XLMUSDT'
-                              ? 'bg-sky-600 text-white'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          XLM / USDT (${xlmLive.toFixed(4)})
+                          Sync
                         </button>
                       </div>
 
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        <span>{activeStats?.name || 'Spot & Perpetual Paper Feed'}</span>
-                        <span aria-hidden="true" className="mx-2">
-                          ·
-                        </span>
-                        <span>
-                          {activeStats?.isLiveStream
-                            ? 'Live Exchange Feed Connected'
-                            : 'Simulated Live Market Feed'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-5 text-xs font-mono tabular-nums">
-                      <div>
-                        <span className="font-sans text-slate-500 dark:text-slate-400 block">
-                          Live Mark Price
-                        </span>
-                        <span className="text-base font-bold text-slate-900 dark:text-white">
-                          $
-                          {symbol === 'BTCUSDT'
-                            ? livePrice.toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })
-                            : livePrice.toFixed(4)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-sans text-slate-500 dark:text-slate-400 block">
-                          24h Change
-                        </span>
-                        <span
-                          className={`font-semibold ${
-                            (activeStats?.priceChangePercent24h ?? 0) >= 0
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-rose-600 dark:text-rose-400'
-                          }`}
-                        >
-                          {(activeStats?.priceChangePercent24h ?? 0) >= 0 ? '+' : ''}
-                          {(activeStats?.priceChangePercent24h ?? 1.84).toFixed(2)}%
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-sans text-slate-500 dark:text-slate-400 block">
-                          24h Range (Low – High)
-                        </span>
-                        <span className="text-slate-800 dark:text-slate-200">
-                          ${(activeStats?.low24h ?? livePrice * 0.96).toFixed(symbol === 'BTCUSDT' ? 2 : 4)} – $
-                          {(activeStats?.high24h ?? livePrice * 1.04).toFixed(symbol === 'BTCUSDT' ? 2 : 4)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-sans text-slate-500 dark:text-slate-400 block">
-                          Hist. Volatility / ATR(14)
-                        </span>
-                        <span className="text-slate-800 dark:text-slate-200">
-                          {(activeStats?.annualizedVolatilityPct ?? 54.2).toFixed(1)}% · $
-                          {(activeStats?.atr14 ?? livePrice * 0.015).toFixed(symbol === 'BTCUSDT' ? 2 : 4)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-sans text-slate-500 dark:text-slate-400 block">
-                          DEX Pool Depth / Spread
-                        </span>
-                        <span className="text-slate-800 dark:text-slate-200">
-                          ${((activeStats?.dexLiquidityUsd ?? 45_000_000) / 1_000_000).toFixed(1)}M ·{' '}
-                          {(activeStats?.dexSpreadBps ?? 4.5).toFixed(1)} bps
-                        </span>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    <div className="lg:col-span-7 xl:col-span-8">
-                      {isLoading && activeCandles.length === 0 ? (
-                        <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-8 h-[480px] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
-                          Loading {symbol} candlestick history and technical indicators...
-                        </div>
-                      ) : (
-                        <CandlestickChart
-                          symbol={symbol}
-                          timeframe={timeframe}
-                          onTimeframeChange={setTimeframe}
-                          candles={activeCandles}
-                          fibLevels={fibLevels}
-                          selectedCandleIndex={selectedCandleIndex}
-                          onSelectCandle={setSelectedCandleIndex}
-                          entryPrice={entryPrice}
-                          stopLoss={currentStopLoss}
-                          takeProfit={currentTakeProfit}
-                          tradeSide={tradeSide}
-                          showFibOverlay={showFibOverlay}
-                          onToggleFibOverlay={() => setShowFibOverlay((v) => !v)}
-                          showTrendBands={showTrendBands}
-                          onToggleTrendBands={() => setShowTrendBands((v) => !v)}
-                          showRiskOverlay={showRiskOverlay}
-                          onToggleRiskOverlay={() => setShowRiskOverlay((v) => !v)}
+                      {showTopWalletCameraScanner && (
+                        <XrplCameraQrScanner
+                          onClose={() => setShowTopWalletCameraScanner(false)}
+                          onAddressScanned={(scannedAddr) => {
+                            setShowTopWalletCameraScanner(false);
+                            setShowTopWalletSyncDrawer(false);
+                            handleSaveUserXrplAddress(scannedAddr);
+                            setAlertBanner(
+                              `Scanned your Android Xaman Receive QR (${scannedAddr.slice(0, 8)}...${scannedAddr.slice(-5)})!`
+                            );
+                          }}
                         />
                       )}
                     </div>
+                  )}
 
-                    <div className="lg:col-span-5 xl:col-span-4">
-                      <RiskSimulatorPanel
+                  {/* ==========================================================
+                   * VIEW 1: SIMPLE TRADE DESK (CLEAN, SPACIOUS, STEP-BY-STEP)
+                   * ========================================================== */}
+                  {tradeDeskSubView === 'simple_desk' && (
+                    <div className="space-y-5">
+                      {/* Compact Single-Row Coin Selector + Live Price */}
+                      <section className="flex flex-wrap items-center justify-between gap-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSymbol('XRPUSDT')}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                              symbol === 'XRPUSDT'
+                                ? 'bg-sky-600 text-white'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                          >
+                            XRP (${xrpLive.toFixed(4)})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSymbol('BTCUSDT')}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                              symbol === 'BTCUSDT'
+                                ? 'bg-amber-600 text-white'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                          >
+                            BTC ($
+                            {btcLive.toLocaleString(undefined, {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            })}
+                            )
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSymbol('XLMUSDT')}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                              symbol === 'XLMUSDT'
+                                ? 'bg-sky-600 text-white'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                          >
+                            XLM (${xlmLive.toFixed(4)})
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-xs font-mono tabular-nums">
+                          <div>
+                            <span className="font-sans text-slate-500 dark:text-slate-400 mr-1.5">
+                              Live:
+                            </span>
+                            <strong className="text-sm text-slate-900 dark:text-white">
+                              $
+                              {symbol === 'BTCUSDT'
+                                ? livePrice.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })
+                                : livePrice.toFixed(4)}
+                            </strong>
+                          </div>
+                          <span
+                            className={`font-semibold ${
+                              (activeStats?.priceChangePercent24h ?? 0) >= 0
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            {(activeStats?.priceChangePercent24h ?? 0) >= 0 ? '+' : ''}
+                            {(activeStats?.priceChangePercent24h ?? 1.84).toFixed(2)}% (24h)
+                          </span>
+                        </div>
+                      </section>
+
+                      {/* Main 2-Column Clean Workspace: Visual Chart + Step-by-Step Order Desk */}
+                      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        <div className="lg:col-span-7 xl:col-span-8">
+                          {isLoading && activeCandles.length === 0 ? (
+                            <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-8 h-[440px] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+                              Loading {symbol} chart...
+                            </div>
+                          ) : (
+                            <CandlestickChart
+                              symbol={symbol}
+                              timeframe={timeframe}
+                              onTimeframeChange={setTimeframe}
+                              candles={activeCandles}
+                              fibLevels={fibLevels}
+                              selectedCandleIndex={selectedCandleIndex}
+                              onSelectCandle={setSelectedCandleIndex}
+                              entryPrice={entryPrice}
+                              stopLoss={currentStopLoss}
+                              takeProfit={currentTakeProfit}
+                              tradeSide={tradeSide}
+                              showFibOverlay={showFibOverlay}
+                              onToggleFibOverlay={() => setShowFibOverlay((v) => !v)}
+                              showTrendBands={showTrendBands}
+                              onToggleTrendBands={() => setShowTrendBands((v) => !v)}
+                              showRiskOverlay={showRiskOverlay}
+                              onToggleRiskOverlay={() => setShowRiskOverlay((v) => !v)}
+                              accountBalance={accountBalance}
+                              riskPercent={riskPercent}
+                              rrRatio={rrRatio}
+                              stopDistancePct={stopDistancePct}
+                              onEntryPriceChange={setEntryPrice}
+                              onStopDistancePctChange={setStopDistancePct}
+                              onRrRatioChange={setRrRatio}
+                            />
+                          )}
+                        </div>
+
+                        <div className="lg:col-span-5 xl:col-span-4">
+                          <RiskSimulatorPanel
+                            symbol={symbol}
+                            livePrice={livePrice}
+                            atr14={activeStats?.atr14 ?? livePrice * 0.015}
+                            accountBalance={accountBalance}
+                            onAccountBalanceChange={setAccountBalance}
+                            entryPrice={entryPrice}
+                            onEntryPriceChange={setEntryPrice}
+                            stopDistancePct={stopDistancePct}
+                            onStopDistancePctChange={setStopDistancePct}
+                            riskPercent={riskPercent}
+                            onRiskPercentChange={setRiskPercent}
+                            rrRatio={rrRatio}
+                            onRrRatioChange={setRrRatio}
+                            tradeSide={tradeSide}
+                            onTradeSideChange={setTradeSide}
+                            instrument={instrument}
+                            onInstrumentChange={setInstrument}
+                            leverage={leverage}
+                            onLeverageChange={setLeverage}
+                            onOpenPaperPosition={handleOpenPaperPosition}
+                            connectedXrplAddress={embeddedXrplAddress}
+                            onChangeXrplAddress={(addr) => handleSaveUserXrplAddress(addr)}
+                            onSwitchToXrpSymbol={() => handleSelectSymbol('XRPUSDT')}
+                            importedTenSet={importedXrplDexSet}
+                          />
+                        </div>
+                      </section>
+                    </div>
+                  )}
+
+                  {/* ==========================================================
+                   * VIEW 2: OPTION B — SCAN ANY CHART SCREENSHOT (AI STUDY HELPER)
+                   * ========================================================== */}
+                  {tradeDeskSubView === 'chart_scanner' && (
+                    <ChartScreenshotScanner
+                      accountBalance={accountBalance}
+                      riskPercent={riskPercent}
+                      connectedXrplAddress={embeddedXrplAddress}
+                      onStageSetupIntoDesk={(payload) => {
+                        handleSelectSymbol('XRPUSDT');
+                        setInstrument('spot');
+                        setLeverage(1);
+                        setTradeSide('long');
+                        setShowRiskOverlay(true);
+                        setEntryPrice(payload.buyPrice);
+                        setRrRatio(payload.rrRatio);
+                        setImportedXrplDexSet({
+                          ...payload,
+                          nonce: Date.now(),
+                        });
+                        setTradeDeskSubView('simple_desk');
+                        setAlertBanner(
+                          `Loaded ${payload.setupName} onto your Simple Trade Desk (Entry $${payload.buyPrice.toFixed(
+                            4
+                          )} · Target $${payload.sellPrice.toFixed(4)})!`
+                        );
+                      }}
+                    />
+                  )}
+
+                  {/* ==========================================================
+                   * VIEW 3: SUPPORT/RESISTANCE ALERTS & 1-BY-1 CHECKLIST
+                   * ========================================================== */}
+                  {tradeDeskSubView === 'alerts_checklist' && (
+                    <div className="space-y-6">
+                      <SupportResistanceRadarCard
                         symbol={symbol}
                         livePrice={livePrice}
-                        atr14={activeStats?.atr14 ?? livePrice * 0.015}
-                        accountBalance={accountBalance}
-                        onAccountBalanceChange={setAccountBalance}
-                        entryPrice={entryPrice}
-                        onEntryPriceChange={setEntryPrice}
-                        stopDistancePct={stopDistancePct}
-                        onStopDistancePctChange={setStopDistancePct}
-                        riskPercent={riskPercent}
-                        onRiskPercentChange={setRiskPercent}
-                        rrRatio={rrRatio}
-                        onRrRatioChange={setRrRatio}
-                        tradeSide={tradeSide}
-                        onTradeSideChange={setTradeSide}
-                        instrument={instrument}
-                        onInstrumentChange={setInstrument}
-                        leverage={leverage}
-                        onLeverageChange={setLeverage}
-                        onOpenPaperPosition={handleOpenPaperPosition}
+                        candles={activeCandles}
+                        fibLevels={fibLevels}
                         connectedXrplAddress={embeddedXrplAddress}
-                        onChangeXrplAddress={(addr) => handleSaveUserXrplAddress(addr)}
-                        onSwitchToXrpSymbol={() => handleSelectSymbol('XRPUSDT')}
-                        importedTenSet={importedXrplDexSet}
+                        onLoadSetIntoDex={(payload) => {
+                          handleSelectSymbol('XRPUSDT');
+                          setInstrument('spot');
+                          setLeverage(1);
+                          setTradeSide('long');
+                          setShowRiskOverlay(true);
+                          if (payload.walletAddress) {
+                            handleSaveUserXrplAddress(payload.walletAddress);
+                          }
+                          setImportedXrplDexSet({
+                            ...payload,
+                            nonce: Date.now(),
+                          });
+                          setTradeDeskSubView('simple_desk');
+                          setAlertBanner(
+                            `Staged ${payload.setupName} into Simple Trade Desk — Buy $${payload.buyPrice.toFixed(
+                              4
+                            )} · Sell $${payload.sellPrice.toFixed(4)} (${payload.quantityXrp} XRP)!`
+                          );
+                        }}
+                        onAddPriceAlert={(newAl) =>
+                          setAlerts((prev) => [
+                            { ...newAl, id: `al_${Date.now()}`, triggered: false },
+                            ...prev,
+                          ])
+                        }
+                        onNotifyBanner={(msg) => setAlertBanner(msg)}
+                      />
+
+                      <OneByOneTradeChecklist
+                        contextStep="step14"
+                        xrpLivePrice={xrpLive}
+                        connectedXrplAddress={embeddedXrplAddress}
+                        checklistState={oneByOneChecklist}
+                        onChangeChecklistState={setOneByOneChecklist}
+                        onLoadSetIntoDex={(payload) => {
+                          handleSelectSymbol('XRPUSDT');
+                          setInstrument('spot');
+                          setLeverage(1);
+                          setTradeSide('long');
+                          setShowRiskOverlay(true);
+                          if (payload.walletAddress) {
+                            handleSaveUserXrplAddress(payload.walletAddress);
+                          }
+                          setImportedXrplDexSet({
+                            ...payload,
+                            nonce: Date.now(),
+                          });
+                          setTradeDeskSubView('simple_desk');
+                          const numStr =
+                            payload.setNumber < 10
+                              ? `0${payload.setNumber}`
+                              : String(payload.setNumber);
+                          setAlertBanner(
+                            `Loaded Set #${numStr} (${payload.setupName}) into Simple Trade Desk — ${payload.quantityXrp} XRP Ready!`
+                          );
+                        }}
                       />
                     </div>
-                  </section>
+                  )}
                 </div>
               )}
 
